@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trip visualizer</title>
+<style>
+:root{
+  --ink:#080c17;
+  --bg:#0a1020;
+  --panel:#111a2e;
+  --panel-2:#16213a;
+  --line:#243050;
+  --line-soft:#1b2743;
+  --txt:#e8eeff;
+  --txt-dim:#9dabc9;
+  --txt-faint:#6d7c9c;
+  --flight:#f7b955;
+  --bus:#3ecf8e;
+  --car:#5aa9ff;
+  --stay:#a78bfa;
+  --act:#fb7185;
+  --note:#7dd3fc;
+  --gap:#7a89ab;
+  --warn:#ffb020;
+  --shadow:0 10px 30px rgba(0,0,0,.45);
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:
+    radial-gradient(1200px 700px at 15% -10%, #16233f 0%, transparent 60%),
+    radial-gradient(900px 600px at 95% 0%, #1a1b3a 0%, transparent 55%),
+    var(--bg);
+  color:var(--txt);
+  font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#26324f;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#33436b;background-clip:content-box}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- layout ---------- */
+.app{display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:minmax(0,1fr);height:100vh;height:100dvh}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:12px;padding:0 12px 10px;min-height:0}
+
+/* ---------- top bar ---------- */
+.topbar{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;min-width:0;
+  padding:12px 16px 12px;
+}
+.brand{display:flex;flex-direction:column;gap:2px;min-width:230px}
+.brand h1{
+  margin:0;font-size:17px;letter-spacing:.2px;font-weight:650;
+  display:flex;align-items:center;gap:9px;white-space:nowrap;
+}
+.brand h1 .globe{width:18px;height:18px;opacity:.85;flex:none}
+.brand .sub{font-size:12px;color:var(--txt-dim);letter-spacing:.3px}
+.stats{display:flex;gap:8px;flex-wrap:wrap;flex:1;min-width:0}
+.stat{
+  background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+  border:1px solid var(--line-soft);border-radius:10px;padding:4px 9px;min-width:56px;
+}
+.stat b{display:block;font-size:14.5px;font-weight:650;letter-spacing:.2px;line-height:1.2}
+.stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--txt-faint);margin-top:1px}
+.tabs{display:flex;background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:11px;padding:3px;gap:2px}
+.tabs button{padding:6px 14px;border-radius:8px;font-size:13px;color:var(--txt-dim);display:flex;align-items:center;gap:7px}
+.tabs button svg{width:15px;height:15px;opacity:.8}
+.tabs button:hover{color:var(--txt)}
+.tabs button.on{background:linear-gradient(180deg,#2b3a60,#22304f);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.tripctl{display:flex;align-items:center;gap:7px}
+.tripctl select{
+  background:rgba(255,255,255,.05);border:1px solid var(--line-soft);color:var(--txt);
+  border-radius:9px;padding:7px 9px;font:inherit;font-size:12.5px;max-width:190px;cursor:pointer
+}
+.tripctl select:hover{border-color:#3a4b78}
+.tripctl a{
+  display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;font-size:12.5px;
+  color:var(--txt-dim);text-decoration:none;border:1px solid var(--line-soft);background:rgba(255,255,255,.04)
+}
+.tripctl a:hover{color:#fff;border-color:#3a4b78}
+.tripctl a svg{width:13px;height:13px}
+
+/* ---------- stage ---------- */
+.stage{position:relative;background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;min-height:0;min-width:0;box-shadow:var(--shadow)}
+.view{position:absolute;inset:0;display:none}
+.view.on{display:block}
+#mapSvg,#journeySvg{width:100%;height:100%;display:block;touch-action:none}
+.mapctl{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:6px;z-index:4}
+.mapctl button, .chip-btn{
+  width:34px;height:34px;border-radius:9px;background:rgba(12,18,34,.82);border:1px solid var(--line);
+  color:var(--txt-dim);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);
+  font-size:15px;
+}
+.mapctl button:hover{color:#fff;border-color:#3a4b78;background:rgba(24,34,60,.9)}
+.mapctl button.on{color:#0a1020;background:var(--flight);border-color:var(--flight);font-weight:700}
+.mapctl .wide{width:auto;padding:0 10px;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+
+.legend{
+  position:absolute;left:12px;bottom:12px;z-index:4;display:flex;gap:12px;flex-wrap:wrap;
+  background:rgba(10,16,32,.72);border:1px solid var(--line-soft);border-radius:10px;padding:7px 11px;
+  backdrop-filter:blur(6px);font-size:11px;color:var(--txt-dim);max-width:calc(100% - 24px)
+}
+.legend i{display:inline-block;width:16px;height:0;border-top:2px solid;margin-right:6px;vertical-align:middle}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+
+.viewhead{
+  position:absolute;left:12px;top:12px;z-index:4;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  font-size:11px;color:var(--txt-faint);letter-spacing:.05em;text-transform:uppercase;
+  background:rgba(10,16,32,.6);border:1px solid var(--line-soft);border-radius:10px;padding:6px 10px;backdrop-filter:blur(6px)
+}
+.viewhead .seg{display:flex;gap:2px;background:rgba(255,255,255,.05);border-radius:7px;padding:2px}
+.viewhead .seg button{padding:3px 8px;border-radius:5px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--txt-faint)}
+.viewhead .seg button.on{background:#2b3a60;color:#fff}
+
+/* calendar */
+#calWrap{position:absolute;inset:0;overflow:auto;padding:16px 18px 22px}
+.calgrid{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.month{background:rgba(255,255,255,.02);border:1px solid var(--line-soft);border-radius:12px;padding:12px 13px 14px;min-width:246px}
+.month h3{margin:0 0 9px;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--txt-dim);font-weight:600}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:5px}
+.dow span{text-align:center;font-size:9.5px;color:var(--txt-faint);letter-spacing:.06em}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.day{
+  position:relative;aspect-ratio:1;border-radius:7px;border:1px solid transparent;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-size:11px;font-weight:650;background:#131c31;color:#3d4a68;cursor:default;
+}
+.day.in{cursor:pointer;color:#0b1120}
+.day.in:hover{outline:2px solid #fff;outline-offset:1px}
+.day.sel{outline:2px solid #fff;outline-offset:1px}
+.day .evd{display:flex;gap:2px;position:absolute;bottom:4px}
+.day .evd i{width:3.5px;height:3.5px;border-radius:50%;background:rgba(11,17,32,.6)}
+.day .num{position:relative;z-index:1}
+.calnote{margin-top:16px;font-size:11.5px;color:var(--txt-faint);max-width:760px;line-height:1.6}
+.day.today{box-shadow:0 0 0 2px #fff, 0 0 0 4px rgba(255,255,255,.25)}
+.chapheading{margin:26px 0 12px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--txt-dim);font-weight:600}
+.chapters{display:flex;gap:10px;flex-wrap:wrap}
+.chapter{
+  position:relative;background:rgba(255,255,255,.03);border:1px solid var(--line-soft);border-radius:12px;
+  padding:11px 13px 12px 15px;min-width:186px;max-width:220px;cursor:pointer;overflow:hidden
+}
+.chapter:hover{background:rgba(255,255,255,.06);border-color:#33436b}
+.chapter .bar{position:absolute;left:0;top:0;bottom:0;width:3px}
+.chapter b{display:block;font-size:13.5px;font-weight:650}
+.chapter .cw{font-size:11px;color:var(--txt-faint);margin-top:1px}
+.chapter .cn{font-size:11.5px;color:var(--txt-dim);margin-top:6px;line-height:1.45}
+.chapter .cbig{font-size:19px;font-weight:650;letter-spacing:-.2px}
+.chapter .cbig span{font-size:10.5px;color:var(--txt-faint);letter-spacing:.06em;font-weight:500;margin-left:4px}
+.callegend{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.callegend span{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-dim)}
+.callegend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+/* ---------- side panel ---------- */
+.side{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);display:flex;flex-direction:column;min-height:0;min-width:0;box-shadow:var(--shadow)}
+.sidehead{padding:11px 12px 9px;border-bottom:1px solid var(--line-soft);display:flex;flex-direction:column;gap:8px}
+.search{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);border-radius:9px;padding:6px 10px}
+.search input{flex:1;background:none;border:none;outline:none;color:var(--txt);font:inherit;font-size:13px}
+.search input::placeholder{color:var(--txt-faint)}
+.search svg{width:14px;height:14px;color:var(--txt-faint);flex:none}
+.filters{display:flex;gap:5px;flex-wrap:wrap}
+.filters button{
+  font-size:11px;padding:4px 9px;border-radius:20px;border:1px solid var(--line-soft);
+  color:var(--txt-dim);background:rgba(255,255,255,.03);display:flex;align-items:center;gap:5px
+}
+.filters button i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.filters button.on{background:#fff;color:#0b1120;border-color:#fff;font-weight:600}
+.list{overflow:auto;padding:6px 10px 26px;flex:1;scroll-behavior:smooth}
+.daygroup{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,var(--panel) 72%,rgba(17,26,46,0));
+  padding:11px 2px 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint);
+  display:flex;align-items:baseline;gap:8px}
+.daygroup b{color:var(--txt);font-size:12.5px;letter-spacing:.04em;font-weight:650}
+.daygroup .dnum{margin-left:auto;font-size:10px;color:#4c5a7c;letter-spacing:.06em}
+.card{
+  position:relative;display:grid;grid-template-columns:54px 1fr;gap:10px;
+  padding:9px 10px 9px 8px;border-radius:11px;border:1px solid transparent;margin-bottom:3px;cursor:pointer;
+}
+.card:hover{background:rgba(255,255,255,.035)}
+.card.is-active{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.16)}
+.card .when{text-align:right;padding-top:1px}
+.card .when b{display:block;font-size:12.5px;font-weight:650;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.card .when span{display:block;font-size:9.5px;color:var(--txt-faint);letter-spacing:.04em}
+.card .body{min-width:0}
+.card .ttl{display:flex;align-items:flex-start;gap:7px;font-size:13.2px;font-weight:600;line-height:1.32}
+.card .ttl svg{width:14px;height:14px;flex:none;margin-top:2px}
+.card .sub{font-size:11.6px;color:var(--txt-dim);margin-top:2px;line-height:1.4}
+.card .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.tag{font-size:10px;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.06);color:var(--txt-dim);letter-spacing:.03em}
+.tag.warn{background:rgba(255,176,32,.16);color:var(--warn)}
+.card .rail{position:absolute;left:0;top:8px;bottom:8px;width:2.5px;border-radius:3px}
+.card .det{
+  display:none;margin-top:7px;font-size:11.6px;color:var(--txt-dim);line-height:1.55;white-space:pre-wrap;
+  border-left:2px solid var(--line);padding:2px 0 2px 9px
+}
+.card.open .det{display:block}
+.card .more{margin-top:5px;font-size:10.5px;color:var(--txt-faint);letter-spacing:.05em;text-transform:uppercase}
+.card:hover .more{color:var(--note)}
+.emptylist{padding:26px 8px;text-align:center;color:var(--txt-faint);font-size:12.5px}
+
+/* ---------- transport / scrubber ---------- */
+.transport{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:9px 18px 12px}
+.playgrp{display:flex;align-items:center;gap:6px}
+.play{
+  width:38px;height:38px;border-radius:50%;background:linear-gradient(180deg,#f7c86b,#e9a13b);color:#1a1206;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(233,161,59,.32)
+}
+.play:hover{filter:brightness(1.07)}
+.play svg{width:15px;height:15px}
+.mini{width:30px;height:30px;border-radius:8px;border:1px solid var(--line-soft);color:var(--txt-dim);display:flex;align-items:center;justify-content:center}
+.mini:hover{color:#fff;border-color:#3a4b78}
+.mini svg{width:13px;height:13px}
+.speed{display:flex;gap:2px;background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:9px;padding:2px;margin-left:2px}
+.speed button{font-size:10.5px;padding:4px 7px;border-radius:6px;color:var(--txt-faint)}
+.speed button.on{background:#2b3a60;color:#fff}
+.scrubwrap{position:relative;padding-top:16px}
+.trackmarks{position:absolute;left:0;right:0;top:0;height:15px;pointer-events:none}
+.trackmarks .mk{position:absolute;transform:translateX(-50%);font-size:9.5px;color:#5a688c;letter-spacing:.06em;white-space:nowrap;top:0}
+.trackmarks .mk::after{content:'';position:absolute;left:50%;top:12px;width:1px;height:5px;background:#2a3757}
+.trackmarks .mk.today{width:0}
+.trackmarks .mk.today::after{background:var(--flight);height:24px;top:8px;opacity:.75;box-shadow:0 0 6px var(--flight)}
+.scrub{
+  -webkit-appearance:none;appearance:none;width:100%;height:22px;background:none;display:block;cursor:pointer
+}
+.scrub::-webkit-slider-runnable-track{height:8px;border-radius:6px;background:var(--track,#1c2743)}
+.scrub::-moz-range-track{height:8px;border-radius:6px;background:var(--track,#1c2743)}
+.scrub::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;margin-top:-4px;
+  box-shadow:0 0 0 3px rgba(255,255,255,.18),0 2px 8px rgba(0,0,0,.5)
+}
+.scrub::-moz-range-thumb{width:16px;height:16px;border:none;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.18)}
+.readout{display:flex;align-items:center;gap:14px;justify-content:flex-end;min-width:340px}
+.ro-time{text-align:right}
+.ro-time b{display:block;font-size:15px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.ro-time span{display:block;font-size:10.5px;color:var(--txt-faint);letter-spacing:.05em}
+.ro-loc{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);
+  border-radius:11px;padding:6px 12px;min-width:210px}
+.ro-loc .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none}
+.ro-loc .ic svg{width:14px;height:14px}
+.ro-loc b{display:block;font-size:12.8px;font-weight:620;line-height:1.25}
+.ro-loc span{display:block;font-size:10.5px;color:var(--txt-faint)}
+
+/* ---------- tooltip ---------- */
+#tip{
+  position:fixed;z-index:60;pointer-events:none;opacity:0;transition:opacity .12s;
+  background:rgba(9,14,28,.96);border:1px solid #2c3a60;border-radius:10px;padding:9px 11px;
+  font-size:11.8px;line-height:1.5;max-width:290px;box-shadow:0 12px 34px rgba(0,0,0,.55);color:var(--txt)
+}
+#tip b{font-size:12.5px;display:block;margin-bottom:2px}
+#tip .m{color:var(--txt-faint);font-size:10.8px}
+
+/* ---------- svg map ---------- */
+.ocean{fill:#0a1226}
+.grat{stroke:#16203a;stroke-width:.6;fill:none;vector-effect:non-scaling-stroke}
+.land{fill:#182644;stroke:#25355c;stroke-width:.7;vector-effect:non-scaling-stroke}
+.route{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.route.base{stroke:#33436b;stroke-width:1.6}
+.route.base.gap{stroke:#2c3a5e;stroke-dasharray:4 5}
+.route.done{stroke-width:2.4;filter:url(#glow)}
+.route.done.gap{stroke-dasharray:4 5}
+.node circle.hit{fill:transparent;cursor:pointer}
+.node .ring{fill:none;stroke-width:1.4;opacity:.55}
+.node .core{stroke:#0a1020;stroke-width:1.2}
+.node text{font-size:11px;font-weight:600;fill:#dbe4fb;paint-order:stroke;stroke:#080d1b;stroke-width:3.2px;stroke-linejoin:round;pointer-events:none}
+.node text.sm{font-size:9px;fill:#8fa0c6;font-weight:500}
+.node.dim circle.core{opacity:.45}
+.node.dim text{opacity:.5}
+.subpt{cursor:pointer}
+.subpt circle{stroke:#0a1020;stroke-width:.8}
+.subpt text{font-size:7.5px;fill:#b9c6e6;paint-order:stroke;stroke:#080d1b;stroke-width:2.4px;stroke-linejoin:round;pointer-events:none}
+.traveler .halo{opacity:.28}
+.traveler .puck{fill:#fff;stroke:#0a1020;stroke-width:1.4}
+.traveler text{font-size:9.5px;fill:#fff;paint-order:stroke;stroke:#080d1b;stroke-width:3px;stroke-linejoin:round;font-weight:650}
+
+/* journey chart */
+.j-grid{stroke:#1b2540;stroke-width:1}
+.j-grid.strong{stroke:#2a3757}
+.j-lbl{font-size:10.5px;fill:#7688ad}
+.j-lbl.month{fill:#c3cfeb;font-size:11px;font-weight:600;letter-spacing:.06em}
+.j-place{font-size:11px;fill:#c9d5f2;font-weight:600}
+.j-place tspan.cc{fill:#66769c;font-weight:500;font-size:9.5px}
+.j-move{fill:none;stroke-width:2.2;stroke-linecap:round}
+.j-move.gap{stroke-dasharray:4 5;stroke:var(--gap)}
+.j-stay{fill:none;stroke-width:5;stroke-linecap:round;opacity:.85}
+.j-lodge{fill:none;stroke-width:11;stroke-linecap:butt;opacity:.22;cursor:pointer}
+.j-ev{cursor:pointer}
+.j-head{stroke:#fff;stroke-width:1.2;stroke-dasharray:3 3}
+.j-headfill{fill:rgba(255,255,255,.045)}
+.j-hit{fill:transparent;cursor:pointer}
+
+@media (max-width:1500px){
+  .brand h1{font-size:15.5px}
+  .brand{min-width:0}
+  .stats{gap:6px}
+  .stat{min-width:50px;padding:4px 8px}
+  .topbar{gap:12px}
+}
+@media (max-width:1180px){
+  .main{grid-template-columns:minmax(0,1fr) 330px}
+  .readout{min-width:260px}
+  .ro-loc{min-width:0}
+}
+@media (max-width:940px){
+  body{overflow:auto}
+  .app{height:auto;min-height:100dvh}
+  .main{grid-template-columns:minmax(0,1fr);padding:0 10px 10px}
+  .legend{font-size:10px;gap:8px;padding:6px 8px}
+  .legend span:last-child{display:none}
+  .stage{height:58vh;min-height:340px}
+  .side{height:78vh}
+  .topbar{padding:10px 10px 8px;gap:10px}
+  .brand{min-width:0;flex:1 1 auto}
+  .brand h1{font-size:15px;white-space:normal}
+  .tabs{order:2}
+  .tripctl{order:2}
+  .stats{order:3;flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;padding-bottom:3px;-webkit-overflow-scrolling:touch}
+  .stat{flex:none;min-width:0;padding:4px 10px}
+  .transport{grid-template-columns:1fr;gap:8px;position:sticky;bottom:0;z-index:30;padding:8px 10px 10px;
+    background:rgba(10,16,32,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line-soft)}
+  .playgrp{justify-content:center}
+  .readout{justify-content:space-between;min-width:0}
+  .month{flex:1 1 240px;min-width:210px}
+  .chapter{min-width:150px;flex:1 1 150px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1>
+        <svg class="globe" viewBox="0 0 24 24" fill="none" stroke="#f7b955" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9S14.6 21.4 12 21c-2.6-.4-3.9-5.6-3.9-9S9.4 5.6 12 3z"/></svg>
+        <span id="brandTitle">Trip visualizer</span>
+      </h1>
+      <div class="sub" id="brandSub">—</div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <nav class="tabs" id="tabs">
+      <button data-view="map" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3z"/><path d="M9 3v15M15 6v15"/></svg>Map</button>
+      <button data-view="journey"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 20h18"/><path d="M4 16h4l3-6 3 9 3-11 2 4h2"/></svg>Journey</button>
+      <button data-view="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar</button>
+    </nav>
+    <div class="tripctl">
+      <select id="tripSel" title="Switch between trips saved in this browser"></select>
+      <a href="editor.html" title="Create or edit a trip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+        Edit
+      </a>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="stage">
+      <!-- MAP -->
+      <div class="view on" id="view-map">
+        <svg id="mapSvg" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="2.2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <radialGradient id="halo">
+              <stop offset="0%" stop-color="#fff" stop-opacity=".9"/>
+              <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <rect class="ocean" x="-100000" y="-100000" width="200000" height="200000"/>
+          <g id="mapRoot">
+            <g id="gGrat"></g>
+            <g id="gLand"></g>
+            <g id="gRoutesBase"></g>
+            <g id="gRoutesDone"></g>
+            <g id="gRoutesHit"></g>
+          </g>
+          <!-- these live outside the scaled group: they are positioned by hand so
+               markers and labels keep a constant size at every zoom level -->
+          <g id="gSub"></g>
+          <g id="gNodes"></g>
+          <g id="gTraveler"></g>
+        </svg>
+        <div class="viewhead">
+          <span>Spatial view</span>
+          <span style="color:#4a5878">|</span>
+          <span id="mapHint">drag to pan · scroll to zoom</span>
+        </div>
+        <div class="mapctl">
+          <button id="zIn" title="Zoom in">+</button>
+          <button id="zOut" title="Zoom out">−</button>
+          <button id="zFit" title="Fit the whole loop, start to finish">⤢</button>
+          <button id="zFocus" class="wide" title="Fit the main destination region">Focus</button>
+          <button id="zFollow" title="Follow the traveller (zooms in and tracks the moving dot)">◎</button>
+        </div>
+        <div class="legend" id="mapLegend"></div>
+      </div>
+
+      <!-- JOURNEY (space–time) -->
+      <div class="view" id="view-journey">
+        <svg id="journeySvg"></svg>
+        <div class="viewhead">
+          <span>Space–time chart</span>
+          <span style="color:#4a5878">|</span>
+          <span style="text-transform:none;letter-spacing:0;font-size:11.5px;color:var(--txt-dim)">flat line = staying put, sloped = on the move</span>
+          <span style="color:#4a5878">|</span>
+          <span>y-axis</span>
+          <span class="seg" id="jOrder">
+            <button data-order="lon" class="on">by longitude</button>
+            <button data-order="seq">by route order</button>
+          </span>
+        </div>
+      </div>
+
+      <!-- CALENDAR -->
+      <div class="view" id="view-calendar">
+        <div id="calWrap">
+          <div class="calgrid" id="calGrid"></div>
+          <div class="callegend" id="calLegend"></div>
+          <div class="calnote">
+            Each square is one day, tinted by the town you wake up in; split tints mark travel days. Dots count the
+            scheduled items on that day. Faded squares are days with nothing booked at all — the open stretches of the trip.
+            Click any day to move the whole page to it.
+          </div>
+          <h2 class="chapheading">The trip in chapters</h2>
+          <div class="chapters" id="chapters"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ITINERARY -->
+    <aside class="side">
+      <div class="sidehead">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Search stays, tours, cities…" autocomplete="off">
+        </div>
+        <div class="filters" id="filters">
+          <button data-f="all" class="on">Everything</button>
+          <button data-f="flight"><i style="color:var(--flight)"></i>Flights</button>
+          <button data-f="ground"><i style="color:var(--bus)"></i>Ground</button>
+          <button data-f="stay"><i style="color:var(--stay)"></i>Stays</button>
+          <button data-f="activity"><i style="color:var(--act)"></i>Doing</button>
+          <button data-f="gap"><i style="color:var(--gap)"></i>Gaps</button>
+          <button data-f="warn"><i style="color:var(--warn)"></i>Watch-outs</button>
+        </div>
+      </div>
+      <div class="list" id="list"></div>
+    </aside>
+  </div>
+
+  <footer class="transport">
+    <div class="playgrp">
+      <button class="play" id="play" title="Play / pause (space)">
+        <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="mini" id="stepBack" title="Back 6 h (←)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 6v12L2 12zm11 0v12l-9-6z"/></svg></button>
+      <button class="mini" id="stepFwd" title="Forward 6 h (→)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 6v12l9-6zM2 6v12l9-6z"/></svg></button>
+      <div class="speed" id="speed">
+        <button data-s="0.5">½×</button>
+        <button data-s="1" class="on">1×</button>
+        <button data-s="3">3×</button>
+        <button data-s="8">8×</button>
+      </div>
+      <button class="mini" id="toNow" title="Jump to right now" style="width:auto;padding:0 10px;font-size:11px;letter-spacing:.05em">NOW</button>
+    </div>
+
+    <div class="scrubwrap">
+      <div class="trackmarks" id="trackmarks"></div>
+      <input class="scrub" id="scrub" type="range" min="0" max="10000" value="0" step="1">
+    </div>
+
+    <div class="readout">
+      <div class="ro-time">
+        <b id="roTime">—</b>
+        <span id="roDate">—</span>
+      </div>
+      <div class="ro-loc">
+        <div class="ic" id="roIcon"></div>
+        <div style="min-width:0">
+          <b id="roPlace">—</b>
+          <span id="roStatus">—</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<div id="tip"></div>
+
+<script src="js/world-land.js"></script>
+<script src="js/trip-core.js"></script>
+<script src="js/demo-trip.js"></script>
+<script src="js/viewer.js"></script>
+</body>
+</html>
