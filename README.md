@@ -84,7 +84,11 @@ js/editor.js       editor app — validation UI, trip library, text import
 js/trip-core.js    shared: helpers, schema normalization/validation, model
                    building, localStorage library, itinerary-text importer
 js/demo-trip.js    the fictional bundled demo trip
-js/world-land.js   simplified world coastline data (Mercator, 4000-unit space)
+js/world-land.js   simplified world coastline data (Mercator, 4000-unit space),
+                   generated from Natural Earth land polygons (public domain)
+tools/build-world-land.mjs
+                   regenerates js/world-land.js from a Natural Earth GeoJSON file
+                   (see the header comment for usage and the data source URL)
 ```
 
 ## Bugs fixed while generalizing
