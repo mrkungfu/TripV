@@ -161,18 +161,39 @@ textarea::placeholder{color:#4c5a7c}
       <div class="pane" id="pane-paste">
         <div class="panehead">
           <button class="btn primary" id="btnConvert">Convert to draft config</button>
-          <span class="hint">Paste the plain text of a TripIt-style itinerary (print view / forwarded confirmations). Flights and check-in/out lines are extracted best-effort; the draft lands in the Config tab for you to finish.</span>
+          <span class="hint">Paste the plain text of a TripIt itinerary (the print / plain-text view works best). Flights, buses &amp; transfers, Check&nbsp;In/Check&nbsp;Out lodging and timed activities — including their note lines — are extracted best-effort; the draft lands in the Config tab for you to finish.</span>
         </div>
-        <textarea id="pasteText" spellcheck="false" placeholder="Example of what the importer understands:
+        <textarea id="pasteText" spellcheck="false" placeholder="Example of what the importer understands (TripIt print view):
 
-Delta Air Lines DL 1070
-PHX to DTW
-Departs: Jul 29, 2026 11:30am
-Arrives: Jul 29, 2026 6:17pm
+Wed, Jul 29
+10:52 AM MST
+PHX → DTW
 
-Grand Central Hotel
-Check-in: Jul 30, 2026 3:00pm
-Check-out: Aug 2, 2026 12:00pm"></textarea>
+DL 1070 (Delta Air Lines), Terminal 3, Gate F9
+
+5:36 PM EDT
+Arrive Detroit (DTW)
+
+Thu, Jul 30
+1:40 PM GMT+2
+FlixBus - Frankfurt Airport → Heidelberg
+Depart Frankfurt Airport, 60549 Frankfurt
+
+3:10 PM GMT+2
+Arrive Willy-Brandt-Platz 5, 69115 Heidelberg, Germany
+
+3:00 PM GMT+2
+Check In NH Collection Heidelberg
+Bergheimer Str. 91, Heidelberg, Germany
+
+Fri, Jul 31
+8:50 AM GMT+2
+Walking tour
+Neckarmünzgasse 1, 69117 Heidelberg, Germany
+Until 10:00 AM GMT+2
+
+(The old style still works too:
+PHX to DTW / Departs: Jul 29, 2026 11:30am / Check-in: Jul 30, 2026 3:00pm)"></textarea>
       </div>
 
       <!-- Schema help -->

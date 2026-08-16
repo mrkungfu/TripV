@@ -369,11 +369,22 @@ const TripStore={
 /* ============================================================
    Best-effort plain-text itinerary importer (TripIt-style)
    ============================================================
-   Feeds on the plain text you get from "print itinerary" / forwarded
-   confirmation summaries. It looks for flights (airline + number,
-   AAA → BBB airport pairs, depart/arrive lines) and lodging
-   (check-in / check-out lines) and produces a DRAFT config for the
-   editor. Anything it cannot read is reported, not guessed.
+   Feeds on the plain text you get from TripIt's print / plain-text
+   itinerary view (or forwarded confirmation summaries). It extracts:
+     - flights     time line + "PHX → DTW" + "DL 1070 (Delta Air Lines)"
+                   + "Arrive Detroit (DTW)" blocks, incl. gates/layovers
+     - ground legs "FlixBus - A → B" (or "X Driver To Y") titles with
+                   Depart/Arrive lines → bus / car / train / ferry
+     - lodging     "Check In <name>" / "Check Out <name>" pairs, with
+                   addresses and note lines (PIN codes etc.) kept as det
+     - activities  a time line followed by a plain title, an optional
+                   address line, "Until 9:00 PM GMT+2", and note lines
+   Timezone labels after times ("MST", "GMT+2") are honoured; forwarded
+   confirmation emails pasted inside the itinerary are skipped.
+   Coordinates come from the AIRPORTS and CITIES tables below — nothing
+   is geocoded. Unknown spots get lat/lon 0,0 plus a report entry.
+   Anything the importer assumes (years, placeholder arrival times) is
+   reported, not silently guessed.
 */
 const AIRPORTS={
   ATL:{n:'Atlanta',lat:33.6407,lon:-84.4277,off:-240,cc:'USA'}, BOS:{n:'Boston',lat:42.3656,lon:-71.0096,off:-240,cc:'USA'},
@@ -414,28 +425,159 @@ const AIRPORTS={
   AKL:{n:'Auckland',lat:-37.0082,lon:174.7850,off:720,cc:'New Zealand'}
 };
 
-function parseItineraryText(text){
-  const report=[], places={}, legs=[], stays=[];
-  const lines=String(text||'').split(/\r?\n/).map(s=>s.trim());
-  const MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-  const nowYear=new Date().getFullYear();
+/* City coordinates for ground transport, lodging and activities. The
+   importer scans station names / street addresses for these names
+   (accent-insensitive, whole words, longest match wins). `off` is the
+   typical summer UTC offset in minutes, matching the AIRPORTS table. */
+const CITIES={
+  Frankfurt:{lat:50.1109,lon:8.6821,off:120,cc:'Germany'},
+  Munich:{lat:48.1351,lon:11.5820,off:120,cc:'Germany',aka:['München','Muenchen']},
+  Berlin:{lat:52.5200,lon:13.4050,off:120,cc:'Germany'},
+  Heidelberg:{lat:49.3988,lon:8.6724,off:120,cc:'Germany'},
+  Cologne:{lat:50.9375,lon:6.9603,off:120,cc:'Germany',aka:['Köln','Koeln']},
+  Hamburg:{lat:53.5511,lon:9.9937,off:120,cc:'Germany'},
+  Vienna:{lat:48.2082,lon:16.3738,off:120,cc:'Austria',aka:['Wien']},
+  Salzburg:{lat:47.8095,lon:13.0550,off:120,cc:'Austria'},
+  Linz:{lat:48.3069,lon:14.2858,off:120,cc:'Austria'},
+  Innsbruck:{lat:47.2692,lon:11.4041,off:120,cc:'Austria'},
+  Budapest:{lat:47.4979,lon:19.0402,off:120,cc:'Hungary'},
+  Prague:{lat:50.0755,lon:14.4378,off:120,cc:'Czechia',aka:['Praha']},
+  Bratislava:{lat:48.1486,lon:17.1077,off:120,cc:'Slovakia'},
+  Krakow:{lat:50.0647,lon:19.9450,off:120,cc:'Poland',aka:['Kraków']},
+  Warsaw:{lat:52.2297,lon:21.0122,off:120,cc:'Poland',aka:['Warszawa']},
+  Rome:{lat:41.9028,lon:12.4964,off:120,cc:'Italy',aka:['Roma']},
+  Florence:{lat:43.7696,lon:11.2558,off:120,cc:'Italy',aka:['Firenze']},
+  Venice:{lat:45.4408,lon:12.3155,off:120,cc:'Italy',aka:['Venezia']},
+  Milan:{lat:45.4642,lon:9.1900,off:120,cc:'Italy',aka:['Milano']},
+  Naples:{lat:40.8518,lon:14.2681,off:120,cc:'Italy',aka:['Napoli']},
+  Paris:{lat:48.8566,lon:2.3522,off:120,cc:'France'},
+  Nice:{lat:43.7102,lon:7.2620,off:120,cc:'France'},
+  Madrid:{lat:40.4168,lon:-3.7038,off:120,cc:'Spain'},
+  Barcelona:{lat:41.3874,lon:2.1686,off:120,cc:'Spain'},
+  Seville:{lat:37.3891,lon:-5.9845,off:120,cc:'Spain',aka:['Sevilla']},
+  Lisbon:{lat:38.7223,lon:-9.1393,off:60,cc:'Portugal',aka:['Lisboa']},
+  Porto:{lat:41.1579,lon:-8.6291,off:60,cc:'Portugal'},
+  London:{lat:51.5074,lon:-0.1278,off:60,cc:'UK'},
+  Oxford:{lat:51.7520,lon:-1.2577,off:60,cc:'UK'},
+  Bristol:{lat:51.4545,lon:-2.5879,off:60,cc:'UK'},
+  Edinburgh:{lat:55.9533,lon:-3.1883,off:60,cc:'UK'},
+  Dublin:{lat:53.3498,lon:-6.2603,off:60,cc:'Ireland'},
+  Amsterdam:{lat:52.3676,lon:4.9041,off:120,cc:'Netherlands'},
+  Brussels:{lat:50.8503,lon:4.3517,off:120,cc:'Belgium'},
+  Bruges:{lat:51.2093,lon:3.2247,off:120,cc:'Belgium',aka:['Brugge']},
+  Zurich:{lat:47.3769,lon:8.5417,off:120,cc:'Switzerland',aka:['Zürich']},
+  Geneva:{lat:46.2044,lon:6.1432,off:120,cc:'Switzerland',aka:['Genève']},
+  Copenhagen:{lat:55.6761,lon:12.5683,off:120,cc:'Denmark',aka:['København']},
+  Stockholm:{lat:59.3293,lon:18.0686,off:120,cc:'Sweden'},
+  Oslo:{lat:59.9139,lon:10.7522,off:120,cc:'Norway'},
+  Helsinki:{lat:60.1699,lon:24.9384,off:180,cc:'Finland'},
+  Athens:{lat:37.9838,lon:23.7275,off:180,cc:'Greece'},
+  Istanbul:{lat:41.0082,lon:28.9784,off:180,cc:'Türkiye'},
+  Zagreb:{lat:45.8150,lon:15.9819,off:120,cc:'Croatia'},
+  Split:{lat:43.5081,lon:16.4402,off:120,cc:'Croatia'},
+  Dubrovnik:{lat:42.6507,lon:18.0944,off:120,cc:'Croatia'},
+  Ljubljana:{lat:46.0569,lon:14.5058,off:120,cc:'Slovenia'},
+  Tbilisi:{lat:41.7151,lon:44.8271,off:240,cc:'Georgia',aka:["T'bilisi",'Tiflis']},
+  Kutaisi:{lat:42.2679,lon:42.6946,off:240,cc:'Georgia'},
+  Mestia:{lat:43.0453,lon:42.7278,off:240,cc:'Georgia'},
+  Batumi:{lat:41.6168,lon:41.6367,off:240,cc:'Georgia'},
+  Yerevan:{lat:40.1792,lon:44.4991,off:240,cc:'Armenia'},
+  'New York':{lat:40.7128,lon:-74.0060,off:-240,cc:'USA',aka:['NYC']},
+  Phoenix:{lat:33.4484,lon:-112.0740,off:-420,cc:'USA'}
+};
 
+/* UTC offsets (minutes) for the timezone labels TripIt prints after
+   times, e.g. "10:52 AM MST" or "9:43 AM GMT+2". DST variants are
+   distinct labels, so no timezone database is needed. */
+const TZ_ABBR={
+  UT:0, UTC:0, GMT:0, WET:0, Z:0,
+  WEST:60, BST:60, CET:60,
+  CEST:120, EET:120, SAST:120,
+  EEST:180, MSK:180, TRT:180,
+  GST:240, PKT:300, IST:330, ICT:420, WIB:420, HKT:480, SGT:480,
+  JST:540, KST:540, ACST:570, AEST:600, AEDT:660, NZST:720, NZDT:780,
+  EST:-300, EDT:-240, CST:-360, CDT:-300, MST:-420, MDT:-360,
+  PST:-480, PDT:-420, AKST:-540, AKDT:-480, HST:-600,
+  AST:-240, ADT:-180, NST:-210, NDT:-150
+};
+
+function parseItineraryText(text){
+  const report=[], places={};
+  const legsRaw=[], staysRaw=[], eventsRaw=[];
+  const lines=String(text||'').split(/\r?\n/).map(s=>s.replace(/\u00a0/g,' ').trim());
+  const MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const MONTH_RE='jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+  const nowYear=new Date().getFullYear();
+  const DET_MAX=12;
+  const unknownTz=new Set(), unknownPlaces=new Set();
+  let skippedFwd=0, assumedYear=0;
+
+  /* ---------- dates ---------- */
   function findDate(s){
     let m=s.match(/(\d{4})-(\d{2})-(\d{2})/);
     if(m) return {y:+m[1], mo:+m[2]-1, d:+m[3]};
-    m=s.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/i);
-    if(m) return {y:m[3]?+m[3]:nowYear, mo:MONTHS[m[1].slice(0,3).toLowerCase()], d:+m[2]};
-    m=s.match(/\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?(?:\s+(\d{4}))?/i);
-    if(m) return {y:m[3]?+m[3]:nowYear, mo:MONTHS[m[2].slice(0,3).toLowerCase()], d:+m[1]};
+    m=s.match(new RegExp('\\b('+MONTH_RE+')[a-z]*\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{4}))?','i'));
+    if(m) return {y:m[3]?+m[3]:null, mo:MONTHS[m[1].slice(0,3).toLowerCase()], d:+m[2]};
+    m=s.match(new RegExp('\\b(\\d{1,2})\\s+('+MONTH_RE+')[a-z]*\\.?(?:\\s+(\\d{4}))?','i'));
+    if(m) return {y:m[3]?+m[3]:null, mo:MONTHS[m[2].slice(0,3).toLowerCase()], d:+m[1]};
     return null;
   }
-  function findTime(s){
-    const m=s.match(/\b(\d{1,2}):(\d{2})\s*(am|pm)?\b/i);
-    if(!m) return null;
-    let h=+m[1]; const min=+m[2];
-    if(m[3]){ const ap=m[3].toLowerCase(); if(ap==='pm'&&h<12)h+=12; if(ap==='am'&&h===12)h=0; }
-    return {h,min};
+  /* a line that is ONLY a date — TripIt's "Wed, Jul 29" day headers,
+     or standalone "Jul 29, 2026" / "2026-07-29" lines */
+  const BARE_DATE_RE=new RegExp(
+    '^(?:(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*\\.?,?\\s+)?'+
+    '(?:(?:'+MONTH_RE+')[a-z]*\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?|\\d{1,2}\\s+(?:'+MONTH_RE+')[a-z]*\\.?|\\d{4}-\\d{2}-\\d{2})'+
+    '(?:,?\\s*\\d{4})?$','i');
+  let lastYmd=null;
+  function withYear(dt){ // TripIt day headers carry no year — infer it, assuming chronological order
+    if(dt.y==null){
+      let y=lastYmd? lastYmd.y : nowYear;
+      if(!lastYmd) assumedYear=y;
+      else if(Date.UTC(y,dt.mo,dt.d)<Date.UTC(lastYmd.y,lastYmd.mo,lastYmd.d)-2*DAY) y++;
+      dt.y=y;
+    }
+    lastYmd=dt;
+    return dt;
   }
+  function inlineDate(dd){ // a date found inside a depart/arrive/check line
+    if(!dd) return null;
+    if(dd.y==null) dd.y=curDate? curDate.y : (lastYmd? lastYmd.y : nowYear);
+    return dd;
+  }
+
+  /* ---------- times & timezones ---------- */
+  const TIME_SRC='(\\d{1,2}):(\\d{2})\\s*(am|pm)?(?:\\s*(?:(?:GMT|UTC)\\s*([+-]\\d{1,2})(?::?(\\d{2}))?|([A-Za-z]{2,5})\\b))?';
+  const TIMELINE_RE=new RegExp('^'+TIME_SRC+'$','i');
+  const UNTIL_RE=new RegExp('^until\\s+'+TIME_SRC+'\\s*$','i');
+  const TIME_ANY_RE=new RegExp('\\b'+TIME_SRC,'i');
+  function timeFrom(m){
+    let h=+m[1]; const min=+m[2];
+    if(h>23||min>59) return null;
+    const ap=m[3]&&m[3].toLowerCase();
+    if(ap==='pm'&&h<12)h+=12;
+    if(ap==='am'&&h===12)h=0;
+    let off=null, tzWord=null;
+    if(m[4]!=null){
+      const sign=m[4].charAt(0)==='-'?-1:1;
+      off=(+m[4])*60+sign*(+(m[5]||0));
+    } else if(m[6]){
+      tzWord=m[6];
+      if(tzWord===tzWord.toUpperCase() && TZ_ABBR[tzWord]!=null) off=TZ_ABBR[tzWord];
+    }
+    return {h,min,off,tzWord};
+  }
+  function cleanTime(m){ // for anchored time lines: a lowercase trailing word means it wasn't a time line
+    const t=timeFrom(m);
+    if(!t) return null;
+    if(t.tzWord && t.off==null){
+      if(t.tzWord!==t.tzWord.toUpperCase()) return null;
+      unknownTz.add(t.tzWord);
+    }
+    return t;
+  }
+  function findTimeAny(s){ const m=s.match(TIME_ANY_RE); return m? timeFrom(m):null; }
+
+  /* ---------- ISO helpers ---------- */
   function isoLocal(dt,tm){
     const p=n=>String(n).padStart(2,'0');
     return dt.y+'-'+p(dt.mo+1)+'-'+p(dt.d)+'T'+p(tm?tm.h:12)+':'+p(tm?tm.min:0)+':00';
@@ -444,99 +586,482 @@ function parseItineraryText(text){
     const s=off<0?'-':'+', a=Math.abs(off);
     return s+String(Math.floor(a/60)).padStart(2,'0')+':'+String(a%60).padStart(2,'0');
   }
-  function ensurePlace(code){
+  function isoFromTs(ts,off){
+    const d=new Date(ts+off*MIN), p=n=>String(n).padStart(2,'0');
+    return d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate())+
+      'T'+p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':00'+offStr(off);
+  }
+
+  /* ---------- places ---------- */
+  function normPlaceName(s){
+    return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[\u2019'`]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  }
+  function findCityIn(text){ // scan an address / station name for a known city (longest match wins)
+    if(!text) return null;
+    const hay=' '+normPlaceName(text)+' ';
+    let best=null, bestLen=0;
+    Object.keys(CITIES).forEach(name=>{
+      const info=CITIES[name];
+      [name].concat(info.aka||[]).forEach(alias=>{
+        const n=normPlaceName(alias);
+        if(n.length<=bestLen) return;
+        let i=hay.indexOf(n);
+        while(i>=0){
+          if(!/[a-z0-9]/.test(hay.charAt(i-1)) && !/[a-z0-9]/.test(hay.charAt(i+n.length))){
+            best={name,info}; bestLen=n.length; break;
+          }
+          i=hay.indexOf(n,i+1);
+        }
+      });
+    });
+    return best;
+  }
+  function findPlaceByName(name){ // reuse an existing place: exact name first, containment second
+    const nn=normPlaceName(name);
+    if(!nn) return null;
+    const keys=Object.keys(places);
+    for(let i=0;i<keys.length;i++) if(normPlaceName(places[keys[i]].n)===nn) return keys[i];
+    for(let i=0;i<keys.length;i++){
+      const pn=normPlaceName(places[keys[i]].n);
+      if(pn.length>3&&nn.length>3&&(pn.indexOf(nn)>=0||nn.indexOf(pn)>=0)) return keys[i];
+    }
+    return null;
+  }
+  function slugKey(name){
+    const base=normPlaceName(name).replace(/[^a-z0-9]+/g,'').slice(0,12)||'place';
+    let k=base, i=2;
+    while(places[k]) k=base+(i++);
+    return k;
+  }
+  function ensureAirport(code,obsOff){
+    const ap=AIRPORTS[code.toUpperCase()];
+    if(ap){
+      const hit=findPlaceByName(ap.n);
+      if(hit) return hit;
+      const key=code.toLowerCase();
+      if(!places[key]) places[key]={n:ap.n, r:'', cc:ap.cc, lat:ap.lat, lon:ap.lon, off:(obsOff!=null?obsOff:ap.off)};
+      return key;
+    }
     const key=code.toLowerCase();
-    if(places[key]) return key;
-    const ap=AIRPORTS[code];
-    if(ap){ places[key]={n:ap.n, r:'', cc:ap.cc, lat:ap.lat, lon:ap.lon, off:ap.off}; }
-    else {
-      places[key]={n:code+' (TODO: name)', r:'', cc:'TODO', lat:0, lon:0, off:0};
-      report.push('Unknown airport/place code "'+code+'" — fill in its lat/lon/off by hand.');
+    if(!places[key]){
+      places[key]={n:code+' (TODO: name)', r:'', cc:'TODO', lat:0, lon:0, off:(obsOff!=null?obsOff:0)};
+      unknownPlaces.add(code);
     }
     return key;
   }
+  function ensureCity(hit,obsOff){
+    const found=findPlaceByName(hit.name);
+    if(found) return found;
+    const key=slugKey(hit.name);
+    places[key]={n:hit.name, r:'', cc:hit.info.cc, lat:hit.info.lat, lon:hit.info.lon,
+                 off:(obsOff!=null?obsOff:hit.info.off)};
+    return key;
+  }
+  function ensureStub(name,obsOff){
+    const clean=String(name).replace(/\s+/g,' ').trim().slice(0,40);
+    const found=findPlaceByName(clean);
+    if(found) return found;
+    const key=slugKey(clean);
+    places[key]={n:clean, r:'', cc:'TODO', lat:0, lon:0, off:(obsOff!=null?obsOff:0)};
+    unknownPlaces.add(clean);
+    return key;
+  }
+  function resolvePlace(cands,obsOff,fallbackKey){
+    for(let i=0;i<cands.length;i++){
+      const hit=findCityIn(cands[i]);
+      if(hit) return ensureCity(hit,obsOff);
+    }
+    if(fallbackKey) return fallbackKey;
+    for(let i=0;i<cands.length;i++)
+      if(cands[i]&&cands[i].trim()) return ensureStub(cands[i],obsOff);
+    return null;
+  }
+  function offOf(key){ return places[key]? places[key].off : 0; }
 
-  let curDate=null, pending=null, pendingStay=null, lastName='';
-  const flightNoRe=/\b([A-Z]{2})\s?(\d{2,4})\b/;
-  const routeRe=/\b([A-Z]{3})\b\s*(?:to|→|—|–|-|>)\s*\b([A-Z]{3})\b/;
-  const airlineWordRe=/air|airline|airways|flight|wizz|ryanair|delta|lufthansa|united|klm|easyjet|turkish|condor|jetblue|ana|jal|emirates|qatar/i;
+  /* ---------- parser state ---------- */
+  let curDate=null;      // date of the current "Wed, Jul 29" block
+  let pendingTime=null;  // {d,t,off} — a standalone time line waiting for its item
+  let trans=null;        // flight or ground leg being assembled
+  let act=null;          // activity being assembled
+  let detTarget=null;    // finished/ongoing item that stray note lines annotate
+  let curKey=null;       // where the traveller is after the last completed leg
+  let lastName='';       // legacy format: bare line remembered as a lodging name
+  let skipFwd=false;     // inside a forwarded confirmation email
+  const openStays={};    // normalized lodging name -> queue of stays awaiting check-out
 
+  function pushDet(o,s){
+    if(!o||!o.det) return;
+    s=String(s).replace(/\[\[TripItALT:[^\]]*\]\]/g,'').trim();
+    if(!s||/^courtesy of tripit/i.test(s)) return;
+    if(o.addr===s) return;
+    if(o.det.length>DET_MAX) return;
+    if(o.det.length===DET_MAX){ o.det.push('… (more lines trimmed)'); return; }
+    if(o.det.indexOf(s)<0) o.det.push(s);
+  }
+  function isAddressy(s){
+    return s.length<120 && /\d/.test(s) && /,/.test(s) &&
+      !/^(pin|code|order|seat|until|gate|terminal)\b/i.test(s);
+  }
+  function splitTitle(title){ // "GoTrip - Mestia → Kutaisi" / "Saba Driver To Mestia" endpoints
+    let m=title.match(/^(.*?)(?:→|->)(.*)$/);
+    if(m) return [m[1],m[2]];
+    m=title.match(/^(.*\S)\s+to\s+(\S.*)$/i);
+    if(m) return [m[1],m[2]];
+    return [null,null];
+  }
+  function groundMode(s){
+    if(/flix|\bbus\b|coach|autobus/i.test(s)) return 'bus';
+    if(/ferry|\bboat\b|cruise/i.test(s)) return 'ferry';
+    if(/train|railjet|\brail\b|bahn|\bzug\b|eurostar|amtrak/i.test(s)) return 'train';
+    return 'car';
+  }
+
+  function pushLeg(t){
+    if(!t) return;
+    const label=t.title||t.op||'transport';
+    if(!t.depD){ report.push('Dropped "'+label+'" — no departure date in scope.'); return; }
+    let fk,tk;
+    if(t.isFlight){
+      if(!t.fromCode||!t.toCode){ report.push('Dropped incomplete flight "'+label+'" — missing the '+(!t.fromCode?'origin':'destination')+' airport code.'); return; }
+      fk=ensureAirport(t.fromCode,t.depOff);
+      tk=ensureAirport(t.toCode,t.arrOff);
+    } else {
+      fk=resolvePlace([t.fromAddr,t.fromTitle],t.depOff,curKey);
+      tk=resolvePlace([t.toAddr,t.toTitle],(t.arrOff!=null?t.arrOff:t.depOff),null)||fk;
+      if(!fk){ report.push('Dropped "'+label+'" — could not tell where it starts or ends.'); return; }
+    }
+    const depOff=(t.depOff!=null?t.depOff:offOf(fk));
+    const arrOff=(t.arrOff!=null?t.arrOff:offOf(tk));
+    const depIso=isoLocal(t.depD,t.depT)+offStr(depOff);
+    const depTs=Date.parse(depIso);
+    const title=t.title||((t.fromCode||places[fk].n)+' → '+(t.toCode||places[tk].n));
+    /* TripIt prints "12:00 AM" when a ground arrival time is unknown */
+    const placeholder=!t.isFlight&&t.arrT&&t.arrT.h===0&&t.arrT.min===0;
+    let arrTs, note=null;
+    if(!t.arrT||placeholder){
+      arrTs=depTs+2*HOUR;
+      note=placeholder?'the arrival time looked like a TripIt placeholder (12:00 AM) — assumed a 2 h ride'
+                      :'no arrival time found — assumed 2 h';
+    } else {
+      arrTs=Date.parse(isoLocal(t.arrD||t.depD,t.arrT)+offStr(arrOff));
+      if(arrTs<depTs){ // clock wrapped past midnight with no new day header — assume overnight
+        arrTs+=DAY; note='arrival assumed to be the next day (overnight)';
+        if(arrTs<depTs){ arrTs=depTs+2*HOUR; note='arrival was before departure — assumed a 2 h leg'; }
+      }
+    }
+    if(note) report.push('"'+title+'": '+note+' — fix "arr" in the draft.');
+    const rec={mode:t.mode, from:fk, to:tk, dep:depIso, arr:isoFromTs(arrTs,arrOff),
+               title:title, op:t.op||'', det:t.det||[]};
+    legsRaw.push(rec);
+    curKey=tk;
+    detTarget=rec;
+  }
+  function flushTrans(){ const t=trans; trans=null; if(t) pushLeg(t); }
+  function flushAct(){
+    const a=act; act=null;
+    if(!a) return;
+    if(!a.d){ report.push('Skipped "'+a.title+'" — no date in scope.'); return; }
+    eventsRaw.push(a);
+  }
+
+  function restIsJustDate(rest,dd){ // legacy "Check-in: Jul 30, 2026 3:00pm" vs "Check In <name>"
+    if(!dd) return false;
+    const stripped=rest
+      .replace(new RegExp('\\b('+MONTH_RE+')[a-z]*\\.?','gi'),'')
+      .replace(/\b(am|pm|at|noon|midnight)\b/gi,'')
+      .replace(/[\d:,.\-\/\s]+/g,'');
+    return stripped.length<=2;
+  }
+  function handleCheckIn(rest){
+    flushAct(); flushTrans();
+    rest=rest.trim();
+    const dd=findDate(rest);
+    let st;
+    if(restIsJustDate(rest,dd)){
+      const t2=findTimeAny(rest);
+      st={name:lastName||'TODO: lodging name', inD:inlineDate(dd),
+          inT:t2?{h:t2.h,min:t2.min}:{h:15,min:0}, inOff:t2?t2.off:null,
+          det:[], addr:null, expectAddr:false, placeHint:curKey};
+    } else {
+      st={name:rest||lastName||'TODO: lodging name',
+          inD:(pendingTime?pendingTime.d:curDate),
+          inT:pendingTime?pendingTime.t:{h:15,min:0},
+          inOff:pendingTime?pendingTime.off:null,
+          det:[], addr:null, expectAddr:true, placeHint:curKey};
+    }
+    if(!st.inD){ report.push('Skipped a check-in ("'+st.name+'") — no date in scope.'); return; }
+    const k=normPlaceName(st.name);
+    if(!openStays[k]) openStays[k]=[];
+    openStays[k].push(st);
+    staysRaw.push(st);
+    pendingTime=null; detTarget=st;
+  }
+  function handleCheckOut(rest){
+    flushAct(); flushTrans();
+    rest=rest.trim();
+    const dd=findDate(rest);
+    let name=rest, outD, outT, outOff;
+    if(restIsJustDate(rest,dd)){
+      const t2=findTimeAny(rest);
+      name=''; outD=inlineDate(dd);
+      outT=t2?{h:t2.h,min:t2.min}:{h:11,min:0}; outOff=t2?t2.off:null;
+    } else {
+      outD=(pendingTime?pendingTime.d:curDate);
+      outT=pendingTime?pendingTime.t:{h:11,min:0};
+      outOff=pendingTime?pendingTime.off:null;
+    }
+    let st=null;
+    const k=normPlaceName(name);
+    if(name&&openStays[k]&&openStays[k].length) st=openStays[k].shift();
+    if(!st){
+      const openKeys=Object.keys(openStays).filter(kk=>openStays[kk].length);
+      if(!name&&openKeys.length){ // legacy: unnamed check-out closes the oldest open stay
+        let bk=openKeys[0];
+        openKeys.forEach(kk=>{
+          const a=openStays[kk][0], b=openStays[bk][0];
+          if(Date.UTC(a.inD.y,a.inD.mo,a.inD.d)<Date.UTC(b.inD.y,b.inD.mo,b.inD.d)) bk=kk;
+        });
+        st=openStays[bk].shift();
+      } else if(openKeys.length===1&&openStays[openKeys[0]].length===1){
+        st=openStays[openKeys[0]].shift(); // only one candidate — a near-miss name
+      }
+    }
+    if(!st){
+      st={name:name||'TODO: lodging name', inD:null, inT:null, inOff:null,
+          det:[], addr:null, expectAddr:true, placeHint:curKey};
+      staysRaw.push(st);
+      report.push('Check-out of "'+st.name+'" had no matching check-in — assumed a 1-night stay.');
+    }
+    if(outD){ st.outD=outD; st.outT=outT; st.outOff=outOff; }
+    pendingTime=null; detTarget=st;
+  }
+
+  /* ---------- the line scanner ---------- */
   lines.forEach(line=>{
-    if(!line) return;
-    const d=findDate(line);
-    if(d && !/check.?in|check.?out|depart|arriv/i.test(line)) curDate=d;
+    if(!line){
+      if(act) act.expectAddr=false;
+      if(detTarget&&detTarget.expectAddr) detTarget.expectAddr=false;
+      return;
+    }
+    // forwarded confirmation emails pasted into the itinerary: skip until the next day header
+    if(/^-{3,}\s*forwarded message/i.test(line)){ skipFwd=true; skippedFwd++; return; }
+    if(skipFwd&&!BARE_DATE_RE.test(line)) return;
+
+    // day headers: "Wed, Jul 29" (TripIt) or "Jul 29, 2026" (legacy)
+    if(BARE_DATE_RE.test(line)){
+      const dd=findDate(line);
+      if(dd){ skipFwd=false; curDate=withYear(dd); pendingTime=null; flushAct(); detTarget=null; return; }
+    }
+    if(skipFwd) return;
+
+    // standalone time line — starts (or completes) a timed item
+    let m=line.match(TIMELINE_RE);
+    if(m){
+      const t=cleanTime(m);
+      if(t){ flushAct(); pendingTime={d:curDate, t:{h:t.h,min:t.min}, off:t.off}; return; }
+    }
+
+    // "Until 9:00 PM GMT+2" — the end time of the open activity
+    m=line.match(UNTIL_RE);
+    if(m){
+      const t=cleanTime(m);
+      if(t&&act){ act.endD=curDate; act.endT={h:t.h,min:t.min}; act.endOff=t.off; }
+      else if(t&&detTarget) pushDet(detTarget,line);
+      return;
+    }
 
     // lodging
-    if(/check.?in/i.test(line)){
-      const dd=findDate(line)||curDate;
-      if(dd){
-        pendingStay={ name:(lastName&&!/check.?in/i.test(lastName)?lastName:'TODO: lodging name'),
-                      inD:dd, inT:findTime(line)||{h:15,min:0} };
+    m=line.match(/^check[\s-]?in\b:?\s*(.*)$/i);
+    if(m){ handleCheckIn(m[1]); return; }
+    m=line.match(/^check[\s-]?out\b:?\s*(.*)$/i);
+    if(m){ handleCheckOut(m[1]); return; }
+
+    // flight routes: "PHX → DTW" / "PHX to DTW"
+    m=line.match(/^([A-Z]{3})\s*(?:→|->|—|–|-|to)\s*([A-Z]{3})$/);
+    if(m&&m[1]!==m[2]){
+      flushAct();
+      if(trans&&trans.isFlight&&!trans.fromCode){
+        trans.fromCode=m[1]; trans.toCode=m[2];
+        if(!trans.title) trans.title=m[1]+' → '+m[2];
+      } else {
+        flushTrans();
+        trans={isFlight:true, mode:'flight', fromCode:m[1], toCode:m[2], title:m[1]+' → '+m[2], det:[],
+               depD:(pendingTime?pendingTime.d:curDate),
+               depT:pendingTime?pendingTime.t:null, depOff:pendingTime?pendingTime.off:null};
       }
-      return;
+      pendingTime=null; detTarget=trans; return;
     }
-    if(/check.?out/i.test(line) && pendingStay){
-      const dd=findDate(line)||curDate;
-      if(dd){
-        pendingStay.outD=dd; pendingStay.outT=findTime(line)||{h:11,min:0};
-        stays.push(pendingStay); pendingStay=null;
+
+    // ground transport titles: "FlixBus - Frankfurt Airport (P36, Terminal 1) → M"
+    m=line.match(/^(?:(.+?)\s+[-–—]\s+)?(.+?)\s*(?:→|->)\s*(.+)$/);
+    if(m){
+      flushAct(); flushTrans();
+      const op=(m[1]||'').trim();
+      trans={isFlight:false, mode:groundMode(line), op:op, title:line.slice(0,90),
+             fromTitle:m[2].trim(), toTitle:m[3].trim(), det:[],
+             depD:(pendingTime?pendingTime.d:curDate),
+             depT:pendingTime?pendingTime.t:null, depOff:pendingTime?pendingTime.off:null};
+      pendingTime=null; detTarget=trans; return;
+    }
+
+    // "Depart <station> <address>" (TripIt) / "Departs: Jul 29, 2026 11:30am" (legacy)
+    m=line.match(/^departs?\b:?\s*(.*)$/i);
+    if(m){
+      const rest=m[1].trim();
+      if(!trans&&act){ // "Saba Driver To Mestia" + Depart/Arrive lines → it was a transfer, not an activity
+        const parts=splitTitle(act.title);
+        trans={isFlight:false, mode:groundMode(act.title), op:'', title:act.title, det:act.det,
+               fromTitle:parts[0]||'', toTitle:parts[1]||'',
+               depD:act.d, depT:act.t, depOff:act.off};
+        act=null;
       }
+      if(!trans) trans={isFlight:false, mode:'car', op:'', title:'Transfer', det:[],
+                        depD:null, depT:null, depOff:null};
+      const dd=inlineDate(findDate(rest));
+      if(dd) trans.depD=dd;
+      const t2=rest?findTimeAny(rest):null;
+      if(t2&&(!trans.depT||dd)){ trans.depT={h:t2.h,min:t2.min}; if(t2.off!=null)trans.depOff=t2.off; }
+      if(!trans.depD) trans.depD=(pendingTime?pendingTime.d:curDate);
+      if(!trans.depT&&pendingTime){ trans.depT=pendingTime.t; trans.depOff=pendingTime.off; }
+      const code=rest.match(/\(([A-Z]{3})\)/)||rest.match(/^([A-Z]{3})$/);
+      if(code&&trans.isFlight&&!trans.fromCode) trans.fromCode=code[1];
+      if(rest&&!dd&&!trans.isFlight&&!trans.fromAddr) trans.fromAddr=rest;
+      pendingTime=null; detTarget=trans; return;
+    }
+
+    // "Arrive Detroit (DTW)" / "Arrive <station> <address>" / legacy "Arrives: …"
+    m=line.match(/^arrives?\b:?\s*(.*)$/i);
+    if(m){
+      if(!trans){ if(detTarget)pushDet(detTarget,line); return; }
+      const rest=m[1].trim();
+      if(pendingTime){ trans.arrD=pendingTime.d; trans.arrT=pendingTime.t; trans.arrOff=pendingTime.off; pendingTime=null; }
+      const dd=inlineDate(findDate(rest));
+      if(dd) trans.arrD=dd;
+      const t2=rest?findTimeAny(rest):null;
+      if(t2&&(!trans.arrT||dd)){ trans.arrT={h:t2.h,min:t2.min}; if(t2.off!=null)trans.arrOff=t2.off; }
+      if(!trans.arrD) trans.arrD=curDate;
+      const code=rest.match(/\(([A-Z]{3})\)/);
+      if(trans.isFlight){ if(code&&!trans.toCode) trans.toCode=code[1]; }
+      else if(rest&&!dd&&!trans.toAddr) trans.toAddr=rest;
+      flushTrans(); return;
+    }
+
+    // flight-number lines: "DL 1070 (Delta Air Lines), Terminal 3, Gate F9"
+    m=line.match(/^([A-Z][A-Z0-9]|[A-Z0-9][A-Z])\s?(\d{1,4})\s*\(([^)]+)\)\s*,?\s*(.*)$/);
+    if(m){
+      flushAct();
+      if(!trans||!trans.isFlight){
+        flushTrans();
+        trans={isFlight:true, mode:'flight', det:[], title:'',
+               depD:(pendingTime?pendingTime.d:curDate),
+               depT:pendingTime?pendingTime.t:null, depOff:pendingTime?pendingTime.off:null};
+        pendingTime=null;
+      }
+      if(!trans.op) trans.op=m[1]+' '+m[2]+' ('+m[3]+')';
+      if(m[4]) pushDet(trans,m[4]);
+      detTarget=trans; return;
+    }
+    // legacy flight-number lines: "Delta Air Lines DL 1070"
+    m=line.match(/\b([A-Z]{2})\s?(\d{2,4})\b/);
+    if(m&&/air|airline|airways|flight|wizz|ryanair|delta|lufthansa|united|klm|easyjet|turkish|condor|jetblue|ana|jal|emirates|qatar|pegasus/i.test(line)){
+      flushAct();
+      if(!trans||!trans.isFlight){
+        flushTrans();
+        trans={isFlight:true, mode:'flight', det:[], title:'',
+               depD:(pendingTime?pendingTime.d:curDate),
+               depT:pendingTime?pendingTime.t:null, depOff:pendingTime?pendingTime.off:null};
+        pendingTime=null;
+      }
+      if(!trans.op) trans.op=line.length<60?line:m[1]+' '+m[2];
+      detTarget=trans; return;
+    }
+
+    // a timed plain line becomes an activity
+    if(pendingTime){
+      if(trans) flushTrans(); // a stale transport still open here never got its Arrive line
+      act={title:line.slice(0,90), d:pendingTime.d, t:pendingTime.t, off:pendingTime.off,
+           det:[], addr:null, endD:null, endT:null, endOff:null, expectAddr:true, placeHint:curKey};
+      pendingTime=null; detTarget=act;
+      if(line.length>2&&line.length<70) lastName=line;
       return;
     }
 
-    // flights
-    const route=line.match(routeRe);
-    const fno=line.match(flightNoRe);
-    if(route && route[1]!==route[2]){
-      if(!pending) pending={};
-      pending.from=route[1]; pending.to=route[2];
+    // otherwise the line annotates whatever came last (addresses, gates, PIN codes, seat notes…)
+    if(detTarget){
+      if(detTarget.expectAddr&&!detTarget.addr&&isAddressy(line)){ detTarget.addr=line; detTarget.expectAddr=false; }
+      else { if(detTarget.expectAddr)detTarget.expectAddr=false; pushDet(detTarget,line); }
     }
-    if(fno && (airlineWordRe.test(line)||route)){
-      if(!pending) pending={};
-      if(!pending.op) pending.op=fno[1]+' '+fno[2];
-    }
-    if(/depart/i.test(line)){
-      if(!pending) pending={};
-      pending.depD=findDate(line)||curDate; pending.depT=findTime(line);
-      const ap=line.match(/\(([A-Z]{3})\)/)||line.match(/\b([A-Z]{3})\b\s*$/);
-      if(ap && !pending.from) pending.from=ap[1];
-    }
-    if(/arriv/i.test(line) && pending){
-      pending.arrD=findDate(line)||pending.depD||curDate; pending.arrT=findTime(line);
-      const ap=line.match(/\(([A-Z]{3})\)/)||line.match(/\b([A-Z]{3})\b\s*$/);
-      if(ap && !pending.to) pending.to=ap[1];
-      if(pending.from&&pending.to&&pending.depD){
-        const fk=ensurePlace(pending.from), tk=ensurePlace(pending.to);
-        legs.push({ mode:'flight', from:fk, to:tk,
-          dep:isoLocal(pending.depD,pending.depT)+offStr(places[fk].off),
-          arr:isoLocal(pending.arrD,pending.arrT)+offStr(places[tk].off),
-          title:pending.from+' → '+pending.to, op:pending.op||'' });
-        pending=null;
-      }
-    }
-    if(!/check.?in|check.?out|depart|arriv/i.test(line) && !routeRe.test(line) && line.length>2 && line.length<70)
+    if(line.length>2&&line.length<70)
       lastName=line.replace(/^(hotel|lodging|stay)[:\s]+/i,'').trim()||lastName;
   });
+  flushAct();
+  flushTrans();
 
-  // attach stays to the place the flights last landed in before check-in
-  legs.sort((a,b)=>T(a.dep)-T(b.dep));
-  const stayObjs=stays.map(st=>{
-    const inTs=Date.UTC(st.inD.y,st.inD.mo,st.inD.d,st.inT.h,st.inT.min);
-    let place=legs.length?legs[0].from:Object.keys(places)[0];
-    legs.forEach(l=>{ const dd=findDate(l.dep); if(dd&&Date.UTC(dd.y,dd.mo,dd.d)<=inTs) place=l.to; });
-    if(!place){ place=ensurePlace('XXX'); }
-    const off=places[place]?places[place].off:0;
-    return { place, name:st.name,
-      "in":isoLocal(st.inD,st.inT)+offStr(off),
-      out:isoLocal(st.outD,st.outT)+offStr(off),
-      det:'Imported from pasted text — check the details.' };
+  /* ---------- assemble the draft config ---------- */
+  legsRaw.sort((a,b)=>Date.parse(a.dep)-Date.parse(b.dep));
+  const legs=legsRaw.map(r=>{
+    const o={mode:r.mode, from:r.from, to:r.to, dep:r.dep, arr:r.arr, title:r.title};
+    if(r.op) o.op=r.op;
+    if(r.det.length) o.det=r.det.join('\n');
+    return o;
   });
 
-  if(!legs.length && !stayObjs.length)
-    report.unshift('Nothing recognisable found. The importer looks for lines like "PHX to DTW", "Delta Air Lines DL 1070", "Departs: Jul 29, 2026 11:30am", "Check-in: Jul 30, 2026". You can also build the config by hand — see the Schema tab.');
-  else
-    report.unshift('Parsed '+legs.length+' flight'+(legs.length===1?'':'s')+' and '+stayObjs.length+' stay'+(stayObjs.length===1?'':'s')+'. This is a DRAFT: verify every time and timezone offset, then add ground legs, gaps and activities by hand.');
+  const stays=[];
+  staysRaw.forEach(st=>{
+    const hit=findCityIn(st.addr||'');
+    let pk=hit? ensureCity(hit,(st.inOff!=null?st.inOff:st.outOff)) : (st.placeHint||null);
+    if(!pk&&legsRaw.length) pk=legsRaw[0].from;
+    if(!pk){ report.push('Skipped stay "'+st.name+'" — no place to attach it to.'); return; }
+    const inOff=(st.inOff!=null?st.inOff:offOf(pk)), outOff=(st.outOff!=null?st.outOff:offOf(pk));
+    let inIso=st.inD? isoLocal(st.inD,st.inT)+offStr(inOff) : null;
+    let outIso=st.outD? isoLocal(st.outD,st.outT)+offStr(outOff) : null;
+    if(!inIso&&!outIso){ report.push('Skipped stay "'+st.name+'" — no usable dates.'); return; }
+    if(!inIso) inIso=isoFromTs(Date.parse(outIso)-DAY,outOff);
+    if(!outIso){ outIso=isoFromTs(Date.parse(inIso)+DAY,inOff); report.push('Stay "'+st.name+'" never checks out in the text — assumed 1 night.'); }
+    if(Date.parse(outIso)<=Date.parse(inIso)){ outIso=isoFromTs(Date.parse(inIso)+DAY,inOff); report.push('Stay "'+st.name+'": check-out was not after check-in — assumed 1 night.'); }
+    const o={place:pk, name:st.name, "in":inIso, out:outIso};
+    if(st.addr) o.addr=st.addr;
+    if(st.det.length) o.det=st.det.join('\n');
+    stays.push(o);
+  });
+  stays.sort((a,b)=>Date.parse(a.in)-Date.parse(b.in));
 
-  const cfg={ title:'Imported trip (rename me)', places, legs, stays:stayObjs, events:[] };
+  const events=[];
+  eventsRaw.forEach(a=>{
+    const hit=findCityIn(a.addr||'');
+    let pk=hit? ensureCity(hit,a.off) : (a.placeHint||null);
+    if(!pk&&legsRaw.length) pk=legsRaw[0].from;
+    if(!pk){ report.push('Skipped activity "'+a.title+'" — no place to attach it to.'); return; }
+    const off=(a.off!=null?a.off:offOf(pk));
+    const o={kind:'activity', place:pk, title:a.title, start:isoLocal(a.d,a.t)+offStr(off)};
+    if(a.endT){
+      const eoff=(a.endOff!=null?a.endOff:off);
+      const ets=Date.parse(isoLocal(a.endD||a.d,a.endT)+offStr(eoff));
+      if(ets>=Date.parse(o.start)) o.end=isoFromTs(ets,eoff);
+    }
+    if(a.addr) o.addr=a.addr;
+    if(a.off!=null&&places[pk]&&a.off!==places[pk].off) o.off=a.off;
+    if(a.det.length) o.det=a.det.join('\n');
+    events.push(o);
+  });
+  events.sort((a,b)=>Date.parse(a.start)-Date.parse(b.start));
+
+  /* ---------- import report ---------- */
+  const nF=legs.filter(l=>l.mode==='flight').length, nG=legs.length-nF;
+  if(!legs.length&&!stays.length&&!events.length){
+    report.unshift('Nothing recognisable found. The importer reads TripIt-style plain text: day headers ("Wed, Jul 29"), time lines ("10:52 AM MST"), routes ("PHX → DTW", "FlixBus - A → B" with Depart/Arrive lines), "Check In <name>" / "Check Out <name>", and timed activity titles. The old "PHX to DTW / Departs: Jul 29, 2026 11:30am / Check-in: …" style works too. You can also build the config by hand — see the Schema tab.');
+  } else {
+    report.unshift('Parsed '+nF+' flight'+(nF===1?'':'s')+', '+nG+' ground leg'+(nG===1?'':'s')+', '+
+      stays.length+' stay'+(stays.length===1?'':'s')+' and '+events.length+' activit'+(events.length===1?'y':'ies')+
+      '. This is a DRAFT: verify every time, offset and place, then add "gap" legs for any unbooked stretches the validator flags.');
+    if(nG) report.push('Map note: every leg is drawn as a straight (great-circle) line between its two places\' coordinates — buses and cars are not routed along roads. Ground endpoints were matched to city coordinates by scanning the station/stop text for known city names; nudge any place\'s lat/lon to taste.');
+  }
+  if(assumedYear) report.push('The itinerary text has no year on its dates — assumed '+assumedYear+' (edit the draft if that is wrong).');
+  if(skippedFwd) report.push('Skipped '+skippedFwd+' forwarded confirmation email'+(skippedFwd===1?'':'s')+' embedded in the text (only the itinerary lines around them were read).');
+  if(unknownTz.size) report.push('Unknown timezone label'+(unknownTz.size===1?'':'s')+': '+[...unknownTz].join(', ')+' — those times fell back to the place\'s UTC offset; double-check them.');
+  if(unknownPlaces.size) report.push('No coordinates known for: '+[...unknownPlaces].join(' · ')+'. Added with lat/lon 0,0 — fill them in or the map will draw them off the coast of West Africa.');
+
+  const cfg={ title:'Imported trip (rename me)', places, legs, stays, events };
   return {config:cfg, report};
 }

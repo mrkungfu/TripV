@@ -11,7 +11,7 @@ folder as static files):
 | Page | What it does |
 |---|---|
 | `index.html` | The viewer. Loads the active saved trip, or the bundled fictional demo. You can also drag-and-drop a `.trip.json` file onto it. |
-| `editor.html` | Create/edit trip configs: validate, format, import/export files, manage the trips saved in your browser, and convert pasted TripIt-style itinerary text into a draft config. |
+| `editor.html` | Create/edit trip configs: validate, format, import/export files, manage the trips saved in your browser, and convert pasted TripIt-style itinerary text (flights, buses/transfers, lodging, activities and their notes) into a draft config. |
 
 > Tip: browsers are happiest when the pages are served over HTTP. From this folder:
 > `python3 -m http.server 8000` then open <http://localhost:8000/>.
@@ -61,6 +61,29 @@ in the editor's **Schema help** tab; the short version:
 The editor also accepts a relaxed JS object literal (unquoted keys, trailing commas),
 so data lifted out of an old `<script>` block pastes straight in — hit **Format** to
 normalize it to JSON.
+
+## How map locations are determined
+
+Nothing is geocoded — the map only ever draws coordinates that are in the config:
+
+- **Places** are the anchor: every place needs an explicit `lat`/`lon` (decimal
+  degrees), and those drive the city dots, the labels, and both ends of every leg.
+- **Legs — including buses** — are drawn as a great-circle line between the `from`
+  and `to` places' coordinates, colored by mode. A bus is *not* routed along roads
+  and a train not along tracks; it's a straight chord on the (Mercator) map, exactly
+  like a flight. The animated traveler dot interpolates along that same line.
+- **Stays** pin at their own `lat`/`lon` if given, otherwise at their place's
+  coordinates. **Events** only get a pin when they carry an explicit `lat`/`lon`.
+  Both appear at street-level zoom.
+
+The paste importer fills coordinates from two built-in lookup tables in
+`js/trip-core.js`: `AIRPORTS` (major IATA codes) for flights, and `CITIES`
+(European + a few world cities, with local-name aliases like München/Wien/Roma)
+for everything else. Bus, car and transfer endpoints are matched by scanning the
+station name / street address text for a known city name, so a "FlixBus —
+Frankfurt Airport → …Heidelberg…" leg lands on Frankfurt and Heidelberg city
+coordinates. Anything the importer can't match is created with `lat: 0, lon: 0`
+and called out in the import report so you can fill it in by hand.
 
 ### Migrating a trip out of the old single-file page
 
