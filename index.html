@@ -175,7 +175,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   padding:11px 2px 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint);
   display:flex;align-items:baseline;gap:8px}
 .daygroup b{color:var(--txt);font-size:12.5px;letter-spacing:.04em;font-weight:650}
-.daygroup .dnum{margin-left:auto;font-size:10px;color:#4c5a7c;letter-spacing:.06em}
+.daygroup .dnum{margin-left:auto;font-size:10px;color:#4c5a7c;letter-spacing:.06em;text-transform:none}
 .card{
   position:relative;display:grid;grid-template-columns:54px 1fr;gap:10px;
   padding:9px 10px 9px 8px;border-radius:11px;border:1px solid transparent;margin-bottom:3px;cursor:pointer;
@@ -213,6 +213,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .play svg{width:15px;height:15px}
 .mini{width:30px;height:30px;border-radius:8px;border:1px solid var(--line-soft);color:var(--txt-dim);display:flex;align-items:center;justify-content:center}
 .mini:hover{color:#fff;border-color:#3a4b78}
+.mini.on{color:#0a1020;background:var(--flight);border-color:var(--flight);font-weight:700}
 .mini svg{width:13px;height:13px}
 .speed{display:flex;gap:2px;background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:9px;padding:2px;margin-left:2px}
 .speed button{font-size:10.5px;padding:4px 7px;border-radius:6px;color:var(--txt-faint)}
@@ -391,7 +392,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
         <div class="mapctl">
           <button id="zIn" title="Zoom in">+</button>
           <button id="zOut" title="Zoom out">−</button>
-          <button id="zFit" title="Fit the whole loop, start to finish">⤢</button>
+          <button id="zFit" class="on" title="Fit the whole loop, start to finish">⤢</button>
           <button id="zFocus" class="wide" title="Fit the main destination region">Focus</button>
           <button id="zFollow" title="Follow the traveller (zooms in and tracks the moving dot)">◎</button>
         </div>
@@ -408,8 +409,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
           <span style="color:#4a5878">|</span>
           <span>y-axis</span>
           <span class="seg" id="jOrder">
-            <button data-order="lon" class="on">by longitude</button>
-            <button data-order="seq">by route order</button>
+            <button data-order="lon">by longitude</button>
+            <button data-order="seq" class="on">by route order</button>
           </span>
         </div>
       </div>

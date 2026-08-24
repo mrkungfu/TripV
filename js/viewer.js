@@ -11,9 +11,10 @@ let M=null;                                   // current derived model (buildMod
 let now=0, playing=false, speed=1, raf=null, last=0;
 const view={k:1,x:0,y:0}, base={x:0,y:0,w:1,h:1};
 let follow=false, fitSet=null, mapNeedsFit=false;
-let currentView='map';
-let filter='all', query='', CARDS=[], lastActive=-2, userScrolled=false, programScroll=false, scrollTimer=null;
-let jOrder='lon', jGeom=null;
+let currentView='map', mapZoom='fit', liveNow=false;
+let filter='all', query='', CARDS=[], lastActive=-2, userScrolled=false, programScroll=false, scrollTimer=null, scrollRaf=null;
+let jOrder='seq', jGeom=null;
+const UI_PREFS_KEY='tripviz.ui';
 let fullPath={}, doneEls={}, nodeEls={}, nodeLbl={}, nodeSub={}, SUB=[];
 
 const mapSvg=$('#mapSvg'), mapRoot=$('#mapRoot'), jSvg=$('#journeySvg'), scrub=$('#scrub'), tip=$('#tip');
@@ -176,8 +177,52 @@ function svgPoint(cx,cy){
   const r=mapSvg.getBoundingClientRect();
   return { x: base.x + (cx-r.left)/r.width*base.w, y: base.y + (cy-r.top)/r.height*base.h };
 }
-function syncFollowBtn(){ $('#zFollow').classList.toggle('on',follow); }
-function stopFollow(){ if(follow){ follow=false; syncFollowBtn(); } }
+function readUiPrefs(){
+  try{
+    const p=JSON.parse(localStorage.getItem(UI_PREFS_KEY)||'{}');
+    if(p.view==='map'||p.view==='journey'||p.view==='calendar') currentView=p.view;
+    if(p.mapZoom==='fit'||p.mapZoom==='focus'||p.mapZoom==='follow') mapZoom=p.mapZoom;
+  }catch(e){}
+}
+function saveUiPrefs(){
+  try{ localStorage.setItem(UI_PREFS_KEY, JSON.stringify({view:currentView, mapZoom:mapZoom})); }catch(e){}
+}
+function syncZoomBtns(){
+  $('#zFit').classList.toggle('on', !follow && mapZoom==='fit');
+  $('#zFocus').classList.toggle('on', !follow && mapZoom==='focus');
+  $('#zFollow').classList.toggle('on', follow);
+}
+function syncFollowBtn(){ syncZoomBtns(); }
+function stopFollow(){ if(follow){ follow=false; syncZoomBtns(); } }
+function setMapZoom(mode){
+  mapZoom=mode;
+  if(mode==='follow'){
+    follow=true;
+    if(view.k<3.5) view.k=3.5;
+    centerOnTraveler();
+  } else {
+    follow=false;
+    fitSet = mode==='focus' ? M.focusKeys : null;
+    view.k=1; view.x=0; view.y=0;
+    fitTo(); applyView();
+  }
+  syncZoomBtns();
+  saveUiPrefs();
+}
+function applySavedMapZoom(){
+  follow=false;
+  view.k=1; view.x=0; view.y=0;
+  if(mapZoom==='focus') fitSet=M.focusKeys;
+  else fitSet=null;
+  fitTo();
+  if(mapZoom==='follow'){
+    follow=true;
+    if(view.k<3.5) view.k=3.5;
+    centerOnTraveler();
+  }
+  syncZoomBtns();
+  applyView();
+}
 function centerOnTraveler(){
   const L=M.locationAt(now);
   const [x,y]=proj(L.lon,L.lat);
@@ -400,8 +445,9 @@ function renderList(){
     const key=fmt(it.t0,it.off,'k');
     if(key!==lastKey){
       lastKey=key;
+      const n=daysAhead(it.t0);
       html+='<div class="daygroup"><b>'+fmt(it.t0,it.off,'d')+'</b>'+esc(M.PLACES[it.place].n)+
-            '<span class="dnum">day '+M.dayNo(it.t0)+'</span></div>';
+            '<span class="dnum"'+(n>0?' title="in '+n+' day'+(n===1?'':'s')+'"':'')+'>'+dayLabel(it.t0)+'</span></div>';
     }
     html+='<div class="card" data-id="'+esc(it.id)+'" data-t="'+it.t0+'">'+
       '<div class="rail" style="background:'+it.color+'"></div>'+
@@ -416,24 +462,69 @@ function renderList(){
       '</div></div>';
   });
   listEl.innerHTML = n? html : '<div class="emptylist">Nothing matches that.</div>';
-  CARDS=$$('#list .card').map(el=>({el, t:+el.dataset.t}));
+  CARDS=$$('#list .card').map(el=>{
+    const id=el.dataset.id;
+    const it=M.ITEMS.find(x=>x.id===id);
+    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, id};
+  });
   lastActive=-2;
   syncList(now,true);
 }
-function syncList(ts,force){
+function calDayStart(ts){
+  const shift=M.calOff*MIN;
+  return Math.floor((ts+shift)/DAY)*DAY-shift;
+}
+function daysAhead(ts){
+  return Math.round((calDayStart(ts)-calDayStart(Date.now()))/DAY);
+}
+function dayLabel(ts){
+  const n=daysAhead(ts);
+  const label='Day '+M.dayNo(ts);
+  return n>0 ? label+' ('+n+'d)' : label;
+}
+function lastStartedIndex(ts){
   let idx=-1;
   for(let i=0;i<CARDS.length;i++){ if(CARDS[i].t<=ts+1) idx=i; else break; }
+  return idx;
+}
+function nowHighlightIndex(ts){
+  const start=calDayStart(Date.now()), end=start+DAY;
+  let firstToday=-1;
+  for(let i=0;i<CARDS.length;i++){
+    if(CARDS[i].t>=start && CARDS[i].t<end){ firstToday=i; break; }
+  }
+  const last=lastStartedIndex(ts);
+  if(last<0) return firstToday;
+  const c=CARDS[last];
+  if(c.t>=start && c.t<end) return last;          // last thing that already happened today
+  if(ts<c.t1) return last;                        // still underway from a previous day
+  if(firstToday>=0) return firstToday;            // nothing yet today → first thing on this day
+  return last;
+}
+function scrollCardIntoView(el){
+  programScroll=true;
+  if(scrollRaf) cancelAnimationFrame(scrollRaf);
+  scrollRaf=requestAnimationFrame(()=>{
+    scrollRaf=null;
+    const l=$('#list'), r=el.getBoundingClientRect(), lr=l.getBoundingClientRect();
+    l.scrollTop += (r.top-lr.top) - lr.height*0.38;
+    setTimeout(()=>programScroll=false,400);
+  });
+}
+function syncList(ts,force){
+  const idx=liveNow ? nowHighlightIndex(ts) : lastStartedIndex(ts);
   if(idx===lastActive && !force) return;
   if(lastActive>=0 && CARDS[lastActive]) CARDS[lastActive].el.classList.remove('is-active');
   lastActive=idx;
   const active=idx>=0?CARDS[idx].el:null;
   if(!active) return;
   active.classList.add('is-active');
-  if(force||!userScrolled){
-    programScroll=true;
-    const l=$('#list'), r=active.getBoundingClientRect(), lr=l.getBoundingClientRect();
-    if(r.top<lr.top+40 || r.bottom>lr.bottom-20) l.scrollTop += (r.top-lr.top) - lr.height*0.38;
-    setTimeout(()=>programScroll=false,300);
+  if(force){
+    userScrolled=false;
+    scrollCardIntoView(active);
+  } else if(!userScrolled){
+    const r=active.getBoundingClientRect(), lr=$('#list').getBoundingClientRect();
+    if(r.top<lr.top+40 || r.bottom>lr.bottom-20) scrollCardIntoView(active);
   }
 }
 function focusItem(id){
@@ -446,16 +537,23 @@ function focusItem(id){
 /* ============================================================
    6.  Time controls
    ============================================================ */
-function setNow(ts,fromScrub){
+function setNow(ts,fromScrub,opts){
+  liveNow=!!(opts&&opts.live);
   now=clamp(ts,M.T0,M.T1);
   if(!fromScrub) scrub.value=Math.round((now-M.T0)/M.TRIP_MS*10000);
-  render();
+  render(opts&&opts.force);
 }
-function render(){
+function jumpToNow(opts){
+  const t=Date.now();
+  userScrolled=false;
+  setNow(clamp(t,M.T0,M.T1), false, {live:true, force:true});
+  if(opts&&opts.announce && (t<M.T0||t>M.T1)) flash($('#toNow'), t<M.T0?'not yet':'trip over');
+}
+function render(listForce){
   updateRoutes(now);
   placePuck();
   updateJourney(now);
-  syncList(now);
+  syncList(now,listForce);
   const L=M.locationAt(now);
   const off=L.moving? (L.f<.5?L.leg.A.off:L.leg.B.off) : L.P.off;
   $('#roTime').textContent=fmt(now,off,'t')+'  '+tzLabel(off);
@@ -477,6 +575,7 @@ function render(){
   }
   const pct=((now-M.T0)/M.TRIP_MS*100).toFixed(2);
   scrub.style.setProperty('--track','linear-gradient(90deg,#f7b955 0%,#fb7185 '+pct+'%,#1c2743 '+pct+'%)');
+  $('#toNow').classList.toggle('on', liveNow);
   if(follow) centerOnTraveler();
 }
 function togglePlay(){
@@ -556,21 +655,24 @@ function hideTip(){ tip.style.opacity=0; }
 function loadTrip(cfg){
   M=buildModel(cfg);           // throws on a broken config — callers catch
   stopPlay();
-  now=M.T0;
-  follow=false; syncFollowBtn();
-  fitSet=null; view.k=1; view.x=0; view.y=0;
   query=''; $('#q').value='';
   filter='all'; $$('#filters button').forEach(b=>b.classList.toggle('on',b.dataset.f==='all'));
 
   buildHeader();
   buildMapLayers();
-  fitTo(); applyView();
   buildCalendar();
   buildScrubMarks();
+
+  liveNow=true;
+  userScrolled=false;
+  now=clamp(Date.now(),M.T0,M.T1);
+  scrub.value=Math.round((now-M.T0)/M.TRIP_MS*10000);
+
   renderList();
+  applySavedMapZoom();
   jGeom=null;
-  if(currentView==='journey') drawJourney();
-  setNow(M.T0);
+  setView(currentView, true);
+  render(true);
 }
 function populateTripSel(value){
   const sel=$('#tripSel');
@@ -619,11 +721,15 @@ function bindUI(){
   });
   $('#zIn').onclick=()=>{ const r=mapSvg.getBoundingClientRect(); zoomAt(r.left+r.width/2,r.top+r.height/2,1.6); };
   $('#zOut').onclick=()=>{ const r=mapSvg.getBoundingClientRect(); zoomAt(r.left+r.width/2,r.top+r.height/2,1/1.6); };
-  $('#zFit').onclick=()=>{ fitSet=null; view.k=1;view.x=0;view.y=0; stopFollow(); fitTo(); applyView(); };
-  $('#zFocus').onclick=()=>{ fitSet=M.focusKeys; view.k=1;view.x=0;view.y=0; stopFollow(); fitTo(); applyView(); };
+  $('#zFit').onclick=()=>setMapZoom('fit');
+  $('#zFocus').onclick=()=>setMapZoom('focus');
   $('#zFollow').onclick=()=>{
-    follow=!follow; syncFollowBtn();
-    if(follow){ if(view.k<3.5) view.k=3.5; centerOnTraveler(); }
+    if(follow){
+      follow=false;
+      mapZoom=fitSet?'focus':'fit';
+      syncZoomBtns();
+      saveUiPrefs();
+    } else setMapZoom('follow');
   };
 
   /* map hover + click (delegated) */
@@ -759,11 +865,7 @@ function bindUI(){
   });
   $('#stepBack').onclick=()=>setNow(now-6*HOUR);
   $('#stepFwd').onclick=()=>setNow(now+6*HOUR);
-  $('#toNow').onclick=()=>{
-    const t=Date.now();
-    setNow(clamp(t,M.T0,M.T1));
-    if(t<M.T0||t>M.T1) flash($('#toNow'), t<M.T0?'not yet':'trip over');
-  };
+  $('#toNow').onclick=()=>jumpToNow({announce:true});
 
   /* tooltip dismiss */
   addEventListener('pointerdown',e=>{ if(!e.target.closest('svg')) hideTip(); });
@@ -790,7 +892,7 @@ function bindUI(){
   addEventListener('resize',()=>{
     clearTimeout(rz);
     rz=setTimeout(()=>{
-      if(currentView==='map'){ fitTo(); applyView(); }
+      if(currentView==='map'){ fitTo(); if(follow) centerOnTraveler(); else applyView(); }
       else mapNeedsFit=true;
       if(currentView==='journey') drawJourney();
     },120);
@@ -819,12 +921,13 @@ function bindUI(){
   });
 }
 
-function setView(v){
+function setView(v, silent){
   currentView=v;
   $$('#tabs button').forEach(x=>x.classList.toggle('on',x.dataset.view===v));
   $$('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   if(v==='journey') drawJourney();
-  if(v==='map'&&mapNeedsFit){ fitTo(); applyView(); }
+  if(v==='map'&&mapNeedsFit) applySavedMapZoom();
+  if(!silent) saveUiPrefs();
 }
 
 /* ============================================================
@@ -832,6 +935,7 @@ function setView(v){
    ============================================================ */
 bindUI();
 (function boot(){
+  readUiPrefs();
   const active=TripStore.active();
   if(active && TripStore.get(active)){
     populateTripSel(active);
