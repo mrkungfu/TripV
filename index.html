@@ -51,10 +51,12 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 
 /* ---------- top bar ---------- */
 .topbar{
-  display:flex;align-items:center;gap:14px;flex-wrap:wrap;min-width:0;
-  padding:12px 16px 12px;
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  grid-template-areas:"brand stats stats" "tabs . readout";
+  align-items:center;column-gap:14px;row-gap:8px;min-width:0;
+  padding:12px 12px 10px 16px;
 }
-.brand{display:flex;flex-direction:column;gap:2px;min-width:0}
+.brand{grid-area:brand;display:flex;flex-direction:column;gap:2px;min-width:0}
 .brand h1{
   margin:0;font-size:17px;letter-spacing:.2px;font-weight:650;
   display:flex;align-items:center;gap:8px;white-space:nowrap;min-width:0;
@@ -76,7 +78,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 }
 .editbtn:hover{color:#fff;border-color:#3a4b78}
 .editbtn svg{width:11px;height:11px}
-.stats{display:flex;gap:8px;flex-wrap:nowrap;flex:1 1 0;min-width:0;overflow-x:auto;scrollbar-width:none}
+.stats{grid-area:stats;display:flex;gap:8px;flex-wrap:nowrap;min-width:0;overflow-x:auto;scrollbar-width:none}
 .stats::-webkit-scrollbar{display:none}
 .stat{
   background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
@@ -84,12 +86,12 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 }
 .stat b{display:block;font-size:14.5px;font-weight:650;letter-spacing:.2px;line-height:1.2}
 .stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--txt-faint);margin-top:1px}
-.tabs{display:flex;background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:11px;padding:3px;gap:2px}
+.tabs{grid-area:tabs;justify-self:start;align-self:end;display:flex;background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:11px;padding:3px;gap:2px}
 .tabs button{padding:6px 12px;border-radius:8px;font-size:13px;color:var(--txt-dim);display:flex;align-items:center;gap:7px}
 .tabs button svg{width:15px;height:15px;opacity:.8}
 .tabs button:hover{color:var(--txt)}
 .tabs button.on{background:linear-gradient(180deg,#2b3a60,#22304f);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-.topbar .readout{margin-left:auto}
+.topbar .readout{grid-area:readout;align-self:end;justify-self:end}
 
 /* ---------- stage ---------- */
 .stage{position:relative;background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden;min-height:0;min-width:0;box-shadow:var(--shadow)}
@@ -245,7 +247,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .ro-time b{display:block;font-size:15px;font-weight:650;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis}
 .ro-time span{display:block;font-size:10.5px;color:var(--txt-faint);letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis}
 .ro-loc{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);
-  border-radius:11px;padding:6px 12px;width:260px;flex:none;min-width:0}
+  border-radius:11px;padding:6px 12px;width:300px;flex:none;min-width:0}
 .ro-loc .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none}
 .ro-loc .ic svg{width:14px;height:14px}
 .ro-loc .txt{flex:1;min-width:0}
@@ -305,17 +307,15 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   .brand{min-width:0}
   .stats{gap:6px}
   .stat{min-width:50px;padding:4px 8px}
-  .topbar{gap:12px}
-  .ro-loc{width:240px}
+  .topbar{column-gap:12px}
+  .ro-loc{width:280px}
 }
-.topbar.stats-below{row-gap:8px}
-.topbar.stats-below .stats{order:5;flex:1 1 100%}
 @media (max-width:1180px){
   .main{grid-template-columns:minmax(0,1fr) 330px}
   .tabs button{padding:6px 11px}
   .ro-time{width:180px}
   .ro-time b{font-size:14px}
-  .ro-loc{width:210px}
+  .ro-loc{width:240px}
 }
 @media (max-width:940px){
   body{overflow:auto}
@@ -325,11 +325,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   .legend span:last-child{display:none}
   .stage{height:58vh;min-height:340px}
   .side{height:78vh}
-  .topbar{padding:10px 10px 8px;gap:10px}
-  .brand{min-width:0;flex:1 1 auto}
+  .topbar{grid-template-columns:minmax(0,1fr);grid-template-areas:"brand" "stats" "tabs";padding:10px 10px 8px;gap:10px}
   .brand h1{font-size:15px}
-  .tabs{order:2}
-  .stats{order:3;flex:1 1 100%;padding-bottom:3px;-webkit-overflow-scrolling:touch}
+  .stats{padding-bottom:3px;-webkit-overflow-scrolling:touch}
   .stat{min-width:0;padding:4px 10px}
   .transport{grid-template-columns:1fr;gap:8px;position:sticky;bottom:0;z-index:30;padding:8px 10px 10px;
     background:rgba(10,16,32,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line-soft)}
@@ -358,12 +356,12 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
       </h1>
       <div class="sub" id="brandSub">—</div>
     </div>
+    <div class="stats" id="stats"></div>
     <nav class="tabs" id="tabs">
       <button data-view="map" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3z"/><path d="M9 3v15M15 6v15"/></svg>Map</button>
       <button data-view="journey"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 20h18"/><path d="M4 16h4l3-6 3 9 3-11 2 4h2"/></svg>Journey</button>
       <button data-view="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar</button>
     </nav>
-    <div class="stats" id="stats"></div>
     <!-- .readout is moved here on wide screens and back into the footer on narrow ones (see placeReadout) -->
   </header>
 
