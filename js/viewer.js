@@ -906,7 +906,7 @@ function bindUI(){
   $('#calGrid').addEventListener('pointerout',hideTip);
   $('#chapters').addEventListener('click',e=>{
     const c=e.target.closest('.chapter'); if(!c) return;
-    setNow(+c.dataset.t); setView('map');
+    setNow(+c.dataset.t); if(currentView!=='calendar') setView('map');
   });
 
   /* itinerary list */
