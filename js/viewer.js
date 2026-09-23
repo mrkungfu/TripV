@@ -632,13 +632,6 @@ function buildHeader(){
   $('#tripSel').title=M.title+' — switch between trips saved in this browser';
   $('#brandSub').textContent=fmt(M.T0,M.originOff,'D')+'  →  '+fmt(M.T1,M.originOff,'D');
   document.title=M.title+' · Trip visualizer';
-  fitHeader();
-}
-/* stats share the top row only when they fit whole; otherwise they get a row of their own */
-function fitHeader(){
-  const bar=$('.topbar'), st=$('#stats');
-  bar.classList.remove('stats-below');
-  if(st.scrollWidth>st.clientWidth+1) bar.classList.add('stats-below');
 }
 
 /* ============================================================
@@ -895,7 +888,6 @@ function bindUI(){
   /* resize */
   let rz=null;
   addEventListener('resize',()=>{
-    fitHeader();
     clearTimeout(rz);
     rz=setTimeout(()=>{
       if(currentView==='map'){ fitTo(); if(follow) centerOnTraveler(); else applyView(); }
@@ -906,7 +898,7 @@ function bindUI(){
 
   /* the time/location readout sits in the header on wide screens, next to the scrubber on narrow ones */
   const narrow=matchMedia('(max-width:940px)'), readout=$('.readout');
-  const placeReadout=()=>{ (narrow.matches? $('.transport') : $('.topbar')).appendChild(readout); fitHeader(); };
+  const placeReadout=()=>(narrow.matches? $('.transport') : $('.topbar')).appendChild(readout);
   narrow.addEventListener('change',placeReadout);
   placeReadout();
 
@@ -927,7 +919,6 @@ function bindUI(){
         if(!opt){ opt=document.createElement('option'); opt.value='__dropped'; sel.appendChild(opt); }
         opt.textContent='(file) '+f.name;
         sel.value='__dropped';
-        fitHeader();
       }catch(err){ alert('Could not load "'+f.name+'": '+err.message); }
     };
     rd.readAsText(f);
