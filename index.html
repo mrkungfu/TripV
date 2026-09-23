@@ -134,26 +134,49 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .dow span{text-align:center;font-size:9.5px;color:var(--txt-faint);letter-spacing:.06em}
 .days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .day{
-  position:relative;aspect-ratio:1;border-radius:7px;border:1px solid transparent;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  font-size:11px;font-weight:650;background:#131c31;color:#3d4a68;cursor:default;
+  position:relative;aspect-ratio:1;border-radius:7px;border:1px solid rgba(255,255,255,.03);overflow:hidden;
+  display:flex;flex-direction:column;align-items:stretch;
+  font-size:11px;font-weight:650;background:#111a2d;color:#34405c;cursor:default;
+  transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease;
 }
-.day.in{cursor:pointer;color:#0b1120}
-.day.in:hover{outline:2px solid #fff;outline-offset:1px}
-.day.sel{outline:2px solid #fff;outline-offset:1px}
-.day .evd{display:flex;gap:2px;position:absolute;bottom:4px}
-.day .evd i{width:3.5px;height:3.5px;border-radius:50%;background:rgba(11,17,32,.6)}
-.day .num{position:relative;z-index:1}
+.day .num{flex:1;display:flex;align-items:center;justify-content:center;line-height:1}
+.day.in{cursor:pointer;background:#1c2640;border-color:#27324f;color:#c9d4ee}
+.day.in:hover{background:#243050;border-color:#3a4b78;color:#fff}
+.day .band{flex:0 0 38%;display:flex;align-items:center;justify-content:center}
+.day.open .band{opacity:.4}
+.day.open .num{color:#7b89aa}
+.day .evd{display:flex;gap:2px}
+.day .evd i{width:3.5px;height:3.5px;border-radius:50%;background:rgba(11,17,32,.7)}
+.day.today::after{content:'';position:absolute;top:3px;right:3px;width:4px;height:4px;border-radius:50%;background:var(--flight)}
+.day.in.cur{
+  z-index:2;transform:scale(1.14);background:#34466f;border-color:transparent;color:#fff;font-weight:750;
+  box-shadow:0 0 0 2px #fff,0 0 0 4px rgba(247,185,85,.55),0 6px 18px rgba(0,0,0,.55);
+}
+.day.cur.open .num{color:#fff}
+.day.cur.open .band{opacity:.75}
 .calnote{margin-top:16px;font-size:11.5px;color:var(--txt-faint);max-width:760px;line-height:1.6}
-.day.today{box-shadow:0 0 0 2px #fff, 0 0 0 4px rgba(255,255,255,.25)}
 .chapheading{margin:26px 0 12px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--txt-dim);font-weight:600}
 .chapters{display:flex;gap:10px;flex-wrap:wrap}
 .chapter{
   position:relative;background:rgba(255,255,255,.03);border:1px solid var(--line-soft);border-radius:12px;
-  padding:11px 13px 12px 15px;min-width:186px;max-width:220px;cursor:pointer;overflow:hidden
+  padding:11px 13px 12px 15px;min-width:186px;max-width:220px;cursor:pointer;overflow:hidden;
+  transition:opacity .2s ease,background-color .2s ease,border-color .2s ease,box-shadow .2s ease
 }
 .chapter:hover{background:rgba(255,255,255,.06);border-color:#33436b}
-.chapter .bar{position:absolute;left:0;top:0;bottom:0;width:3px}
+.chapter .bar{position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--pc)}
+.chapter.past{opacity:.42;filter:saturate(.5)}
+.chapter.past:hover{opacity:.8;filter:none}
+.chapter.cur{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--pc) 22%,transparent),color-mix(in srgb,var(--pc) 6%,transparent) 70%);
+  border-color:color-mix(in srgb,var(--pc) 70%,transparent);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--pc) 35%,transparent),0 8px 22px color-mix(in srgb,var(--pc) 18%,transparent);
+}
+.chapter.cur .bar{width:4px}
+.chapter .nowtag{
+  display:none;position:absolute;top:10px;right:10px;padding:2px 7px;border-radius:20px;
+  font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#0b1120;background:var(--pc)
+}
+.chapter.cur .nowtag{display:block}
 .chapter b{display:block;font-size:13.5px;font-weight:650}
 .chapter .cw{font-size:11px;color:var(--txt-faint);margin-top:1px}
 .chapter .cn{font-size:11.5px;color:var(--txt-dim);margin-top:6px;line-height:1.45}
@@ -567,9 +590,10 @@ body.sheet-open{overflow:hidden}
           <div class="calgrid" id="calGrid"></div>
           <div class="callegend" id="calLegend"></div>
           <div class="calnote">
-            Each square is one day, tinted by the town you wake up in; split tints mark travel days. Dots count the
-            scheduled items on that day. Faded squares are days with nothing booked at all — the open stretches of the trip.
-            Click any day to move the whole page to it.
+            Each square is one day. The strip along its bottom is coloured by the town you're in, and on travel days it
+            splits left to right at about the hour you move. Dots count the scheduled items on that day. A faded strip means
+            nothing is booked that day, one of the open stretches of the trip. The raised square is the day the page is
+            showing, and the small amber dot marks today. Click any day to move the whole page to it.
           </div>
           <h2 class="chapheading">The trip in chapters</h2>
           <div class="chapters" id="chapters"></div>
