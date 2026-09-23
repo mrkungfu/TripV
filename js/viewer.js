@@ -365,18 +365,12 @@ function buildCalendar(){
       const sample=dayStart+12*HOUR;
       const inTrip=dayEnd>M.T0 && dayStart<M.T1;
       if(!inTrip){ cells+='<div class="day"><span class="num">'+dnum+'</span></div>'; continue; }
-      const L=M.locationAt(clamp(sample,M.T0,M.T1));
-      let bg;
-      if(L.moving){
-        const a=M.PLACES[L.leg.from].c, b=M.PLACES[L.leg.to].c;
-        bg='linear-gradient(120deg,'+a+' 0 42%,'+b+' 58% 100%)';
-      } else bg=L.P.c;
       const evs=M.ITEMS.filter(it=>it.t0>=dayStart&&it.t0<dayEnd&&it.cls!=='gap');
       const gapDay=!evs.length;
       const isToday=Date.now()>=dayStart&&Date.now()<dayEnd;
       const dots=evs.slice(0,5).map(()=>'<i></i>').join('');
-      cells+='<div class="day in'+(isToday?' today':'')+'" data-t="'+sample+'" style="background:'+bg+
-        (gapDay?';opacity:.42':'')+'"><span class="num">'+dnum+'</span><span class="evd">'+dots+'</span></div>';
+      cells+='<div class="day in'+(isToday?' today':'')+(gapDay?' open':'')+'" data-t="'+sample+'" data-d0="'+dayStart+'">'+
+        '<span class="num">'+dnum+'</span><span class="band" style="background:'+dayBand(dayStart)+'"><span class="evd">'+dots+'</span></span></div>';
     }
     html+='<div class="month"><h3>'+MON_FULL[mm]+' '+yy+'</h3>'+
       '<div class="dow">'+['S','M','T','W','T','F','S'].map(d=>'<span>'+d+'</span>').join('')+'</div>'+
@@ -387,6 +381,53 @@ function buildCalendar(){
     '<span><i style="background:'+M.PLACES[k].c+'"></i>'+esc(M.PLACES[k].n)+'</span>').join('')+
     '<span><i style="background:#4b5876"></i>faded = nothing booked</span>';
   buildChapters();
+  calCurDay=null; calCurChap=null;
+  updateCalendar(now);
+}
+
+/* the town(s) of one calendar day, left → right through the day, as hard
+   colour stops so travel days split sharply at roughly the hour you move */
+function dayBand(dayStart){
+  const N=48, runs=[];
+  for(let i=0;i<N;i++){
+    const L=M.locationAt(clamp(dayStart+(i+.5)*DAY/N,M.T0,M.T1));
+    const k=L.moving?(L.f<.5?L.leg.from:L.leg.to):L.place;
+    const r=runs[runs.length-1];
+    if(r&&r.k===k) r.n++; else runs.push({k,n:1});
+  }
+  // drop sub-hour slivers (layovers, quick connections) into their neighbours
+  const kept=[];
+  runs.forEach((r,i)=>{
+    const prev=kept[kept.length-1];
+    if(r.n<2 && runs.length>1){ if(prev) prev.n+=r.n; else runs[i+1].n+=r.n; return; }
+    if(prev&&prev.k===r.k) prev.n+=r.n; else kept.push(r);
+  });
+  if(kept.length===1) return M.PLACES[kept[0].k].c;
+  let acc=0;
+  return 'linear-gradient(90deg,'+kept.map(r=>{
+    const a=acc/N*100; acc+=r.n;
+    return M.PLACES[r.k].c+' '+a.toFixed(2)+'% '+(acc/N*100).toFixed(2)+'%';
+  }).join(',')+')';
+}
+
+/* follow the playhead: highlight its day, and mark chapters as past / current */
+let calCurDay=null, calCurChap=null, chapStarts=[];
+function updateCalendar(ts){
+  const day=$$('#calGrid .day.in').find(d=>ts>=+d.dataset.d0&&ts<+d.dataset.d0+DAY)||null;
+  if(day!==calCurDay){
+    if(calCurDay) calCurDay.classList.remove('cur');
+    if(day) day.classList.add('cur');
+    calCurDay=day;
+  }
+  let cur=-1;
+  chapStarts.forEach((t,i)=>{ if(ts>=t) cur=i; });
+  if(cur!==calCurChap){
+    $$('#chapters .chapter').forEach((c,i)=>{
+      c.classList.toggle('past',i<cur);
+      c.classList.toggle('cur',i===cur);
+    });
+    calCurChap=cur;
+  }
 }
 
 /* every stretch spent in one town, in order — including the places only touched in transit */
@@ -409,9 +450,10 @@ function buildChapters(){
     else { big='—'; unit='transit only'; }
     chs.push({s,P,hrs,names,booked,last,big,unit});
   });
+  chapStarts=chs.map(c=>c.s.t0);
   $('#chapters').innerHTML=chs.map(c=>
-    '<div class="chapter" data-t="'+(c.s.t0+(c.hrs>1?HOUR:0))+'">'+
-      '<div class="bar" style="background:'+c.P.c+'"></div>'+
+    '<div class="chapter" data-t="'+(c.s.t0+(c.hrs>1?HOUR:0))+'" style="--pc:'+c.P.c+'">'+
+      '<div class="bar"></div><span class="nowtag">Now</span>'+
       '<b>'+esc(c.P.n)+'</b>'+
       '<div class="cw">'+fmt(c.s.t0,c.P.off,'d')+(c.hrs>=20?' → '+fmt(c.s.t1,c.P.off,'d'):'')+'</div>'+
       '<div class="cn"><span class="cbig">'+c.big+'<span>'+c.unit+'</span></span></div>'+
@@ -553,6 +595,7 @@ function render(listForce){
   updateRoutes(now);
   placePuck();
   updateJourney(now);
+  updateCalendar(now);
   syncList(now,listForce);
   const L=M.locationAt(now);
   const off=L.moving? (L.f<.5?L.leg.A.off:L.leg.B.off) : L.P.off;
