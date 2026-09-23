@@ -220,8 +220,10 @@ PHX to DTW / Departs: Jul 29, 2026 11:30am / Check-in: Jul 30, 2026 3:00pm)"></t
             <tr><td><code>mode</code></td><td><code>flight</code> · <code>bus</code> · <code>car</code> · <code>train</code> · <code>ferry</code> · <code>gap</code> (use <code>gap</code> for unbooked stretches — they render dashed and count as open days)</td></tr>
             <tr><td><code>from</code>, <code>to</code></td><td>place keys</td></tr>
             <tr><td><code>dep</code>, <code>arr</code></td><td>ISO 8601 <b>with UTC offset</b>, e.g. <code>"2026-07-29T11:30:00-07:00"</code></td></tr>
-            <tr><td><code>title</code>, <code>op</code></td><td><i>optional</i> headline and operator/detail line</td></tr>
-            <tr><td><code>warn</code>, <code>det</code></td><td><i>optional</i> watch-out text and long details (shown when a card is expanded)</td></tr>
+            <tr><td><code>title</code>, <code>op</code></td><td><i>optional</i> headline and operator / flight-number line. Flights titled <code>"SEA → NRT"</code> get the airport codes shown large on the item card.</td></tr>
+            <tr><td><code>conf</code>, <code>seat</code>, <code>phone</code></td><td><i>optional</i> confirmation / PNR, seat, and a contact number — tap to copy on the item card</td></tr>
+            <tr><td><code>depAddr</code>, <code>arrAddr</code></td><td><i>optional</i> where exactly you board / get off (station, stop, meeting point). <b>Directions</b> on the card goes to <code>depAddr</code>, else the departure airport, else the <code>from</code> place.</td></tr>
+            <tr><td><code>warn</code>, <code>det</code></td><td><i>optional</i> watch-out text and long details (shown on the item card)</td></tr>
           </table>
 
           <h2>stays <span style="font-weight:400;color:var(--txt-faint)">— array of lodging bookings</span></h2>
@@ -231,7 +233,9 @@ PHX to DTW / Departs: Jul 29, 2026 11:30am / Check-in: Jul 30, 2026 3:00pm)"></t
             <tr><td><code>name</code>, <code>addr</code></td><td>lodging name and address line</td></tr>
             <tr><td><code>in</code>, <code>out</code></td><td>check-in / check-out, ISO 8601 with offset</td></tr>
             <tr><td><code>lat</code>, <code>lon</code></td><td><i>optional</i> exact pin (defaults to the place); shows when zoomed to street level</td></tr>
-            <tr><td><code>det</code></td><td><i>optional</i> details — door codes, confirmation numbers, and so on. Stored only in your browser, but remember anything you publish is visible to whoever can open the page.</td></tr>
+            <tr><td><code>phone</code>, <code>conf</code></td><td><i>optional</i> front-desk number and confirmation number — tap to copy / call on the item card</td></tr>
+            <tr><td><code>warn</code></td><td><i>optional</i> watch-out text</td></tr>
+            <tr><td><code>det</code></td><td><i>optional</i> details — door codes, check-in instructions, and so on. Stored only in your browser, but remember anything you publish is visible to whoever can open the page.</td></tr>
           </table>
 
           <h2>events <span style="font-weight:400;color:var(--txt-faint)">— array of everything else</span></h2>
@@ -240,7 +244,8 @@ PHX to DTW / Departs: Jul 29, 2026 11:30am / Check-in: Jul 30, 2026 3:00pm)"></t
             <tr><td><code>kind</code></td><td><code>activity</code> (tours, meetups), <code>note</code> (reminders, deadlines), <code>gapnote</code> (annotates an open stretch)</td></tr>
             <tr><td><code>place</code></td><td>place key</td></tr>
             <tr><td><code>start</code>, <code>end</code></td><td>ISO 8601 with offset; <code>end</code> optional</td></tr>
-            <tr><td><code>lat</code>, <code>lon</code>, <code>addr</code></td><td><i>optional</i> meeting point, pinned on the zoomed-in map</td></tr>
+            <tr><td><code>lat</code>, <code>lon</code>, <code>addr</code></td><td><i>optional</i> meeting point, pinned on the zoomed-in map; <b>Directions</b> on the item card uses the pin, else the address</td></tr>
+            <tr><td><code>phone</code>, <code>conf</code></td><td><i>optional</i> contact number and booking reference — tap to copy / call on the item card</td></tr>
             <tr><td><code>warn</code>, <code>det</code>, <code>off</code></td><td><i>optional</i>; <code>off</code> overrides the display timezone for this one item</td></tr>
           </table>
 

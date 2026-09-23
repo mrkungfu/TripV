@@ -8,6 +8,7 @@
 
 /* ---------- state ---------- */
 let M=null;                                   // current derived model (buildModel)
+let curCfg=null, curName='__demo';            // raw config behind M, and its library name (or __demo / __dropped)
 let now=0, playing=false, speed=1, raf=null, last=0;
 const view={k:1,x:0,y:0}, base={x:0,y:0,w:1,h:1};
 let follow=false, fitSet=null, mapNeedsFit=false;
@@ -431,7 +432,7 @@ function passes(it){
   if(filter==='warn' && !it.warn) return false;
   if(filter!=='all' && filter!=='warn' && it.cls!==filter) return false;
   if(query){
-    const hay=(it.title+' '+it.sub+' '+(it.det||'')+' '+M.PLACES[it.place].n).toLowerCase();
+    const hay=(it.title+' '+it.sub+' '+(it.det||'')+' '+(it.ref.conf||'')+' '+M.PLACES[it.place].n).toLowerCase();
     if(!hay.includes(query)) return false;
   }
   return true;
@@ -449,7 +450,7 @@ function renderList(){
       html+='<div class="daygroup"><b>'+fmt(it.t0,it.off,'d')+'</b>'+esc(M.PLACES[it.place].n)+
             '<span class="dnum"'+(n>0?' title="in '+n+' day'+(n===1?'':'s')+'"':'')+'>'+dayLabel(it.t0)+'</span></div>';
     }
-    html+='<div class="card" data-id="'+esc(it.id)+'" data-t="'+it.t0+'">'+
+    html+='<div class="card" role="button" tabindex="0" data-id="'+esc(it.id)+'" data-t="'+it.t0+'">'+
       '<div class="rail" style="background:'+it.color+'"></div>'+
       '<div class="when"><b>'+fmt(it.t0,it.off,'t')+'</b><span>'+tzLabel(it.off)+'</span></div>'+
       '<div class="body">'+
@@ -457,9 +458,9 @@ function renderList(){
         (it.sub?'<div class="sub">'+esc(it.sub)+'</div>':'')+
         '<div class="meta">'+it.tags.map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+
           (it.warn?'<span class="tag warn">⚠ heads-up</span>':'')+'</div>'+
-        ((it.det||it.warn)?'<div class="det">'+(it.warn?'<b style="color:var(--warn)">'+esc(it.warn)+'</b>'+(it.det?'\n\n':''):'')+esc(it.det||'')+'</div>':'')+
-        ((it.det||it.warn)?'<div class="more">details ▾</div>':'')+
-      '</div></div>';
+      '</div>'+
+      '<svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>'+
+    '</div>';
   });
   listEl.innerHTML = n? html : '<div class="emptylist">Nothing matches that.</div>';
   CARDS=$$('#list .card').map(el=>{
@@ -528,10 +529,13 @@ function syncList(ts,force){
   }
 }
 function focusItem(id){
-  const c=$('#list .card[data-id="'+CSS.escape(id)+'"]'); if(!c) return;
-  userScrolled=false; c.classList.add('open');
-  const l=$('#list'), r=c.getBoundingClientRect(), lr=l.getBoundingClientRect();
-  l.scrollTop += (r.top-lr.top) - lr.height*0.32;
+  const c=$('#list .card[data-id="'+CSS.escape(id)+'"]');
+  if(c){
+    userScrolled=false;
+    const l=$('#list'), r=c.getBoundingClientRect(), lr=l.getBoundingClientRect();
+    l.scrollTop += (r.top-lr.top) - lr.height*0.32;
+  }
+  openCard(id);
 }
 
 /* ============================================================
@@ -650,27 +654,36 @@ function hideTip(){ tip.style.opacity=0; }
 /* ============================================================
    9.  Trip loading + library
    ============================================================ */
-function loadTrip(cfg){
+/* opts.keep: reloading the same trip after an edit — keep the time, filters and map view */
+function loadTrip(cfg,opts){
+  const keep=!!(opts&&opts.keep);
   M=buildModel(cfg);           // throws on a broken config — callers catch
+  curCfg=cfg;
+  closeCard();
   stopPlay();
-  query=''; $('#q').value='';
-  filter='all'; $$('#filters button').forEach(b=>b.classList.toggle('on',b.dataset.f==='all'));
+  if(!keep){
+    query=''; $('#q').value='';
+    filter='all'; $$('#filters button').forEach(b=>b.classList.toggle('on',b.dataset.f==='all'));
+  }
 
   buildHeader();
   buildMapLayers();
   buildCalendar();
   buildScrubMarks();
 
-  liveNow=true;
-  userScrolled=false;
-  now=clamp(Date.now(),M.T0,M.T1);
+  if(keep) now=clamp(now,M.T0,M.T1);
+  else {
+    liveNow=true;
+    userScrolled=false;
+    now=clamp(Date.now(),M.T0,M.T1);
+  }
   scrub.value=Math.round((now-M.T0)/M.TRIP_MS*10000);
 
   renderList();
-  applySavedMapZoom();
+  if(keep) applyView(); else applySavedMapZoom();
   jGeom=null;
   setView(currentView, true);
-  render(true);
+  render(!keep);
 }
 function populateTripSel(value){
   const sel=$('#tripSel');
@@ -680,16 +693,18 @@ function populateTripSel(value){
   if(sel.selectedIndex<0) sel.value='__demo';
 }
 function loadByName(name){
-  if(name==='__demo'){ TripStore.setActive(''); loadTrip(DEMO_TRIP); return; }
+  if(name==='__demo'){ TripStore.setActive(''); loadTrip(DEMO_TRIP); curName='__demo'; return; }
   const cfg=TripStore.get(name);
   try{
     if(!cfg) throw new Error('Trip "'+name+'" was not found in this browser.');
     loadTrip(cfg);
+    curName=name;
     TripStore.setActive(name);
   }catch(err){
     alert('Could not load "'+name+'": '+err.message+'\n\nFalling back to the demo trip. Open the editor to fix it.');
     populateTripSel('__demo');
     loadTrip(DEMO_TRIP);
+    curName='__demo';
     TripStore.setActive('');
   }
 }
@@ -835,12 +850,17 @@ function bindUI(){
   });
 
   /* itinerary list */
-  $('#list').addEventListener('click',e=>{
-    const c=e.target.closest('.card'); if(!c) return;
-    if(e.target.closest('.more')||e.target.closest('.det')){ c.classList.toggle('open'); return; }
+  const openFromList=c=>{
     setNow(+c.dataset.t);
     if(view.k>1.05) centerOnTraveler();
-    c.classList.toggle('open');
+    openCard(c.dataset.id);
+  };
+  $('#list').addEventListener('click',e=>{
+    const c=e.target.closest('.card'); if(c) openFromList(c);
+  });
+  $('#list').addEventListener('keydown',e=>{
+    const c=e.target.closest('.card');
+    if(c && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); openFromList(c); }
   });
   $('#filters').addEventListener('click',e=>{
     const b=e.target.closest('button'); if(!b) return;
@@ -876,7 +896,8 @@ function bindUI(){
 
   /* keyboard */
   addEventListener('keydown',e=>{
-    if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if(cardIsOpen() || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if(e.target.closest && e.target.closest('#list .card') && (e.key==='Enter'||e.code==='Space')) return;
     if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
     else if(e.key==='ArrowRight') setNow(now+(e.shiftKey?DAY:6*HOUR));
     else if(e.key==='ArrowLeft') setNow(now-(e.shiftKey?DAY:6*HOUR));
@@ -914,6 +935,7 @@ function bindUI(){
       try{
         const cfg=parseTripConfigText(rd.result);
         loadTrip(cfg);
+        curName='__dropped';
         const sel=$('#tripSel');
         let opt=$('#tripSel option[value="__dropped"]');
         if(!opt){ opt=document.createElement('option'); opt.value='__dropped'; sel.appendChild(opt); }

@@ -103,9 +103,9 @@ const PLACE_PALETTE=['#fb923c','#60a5fa','#34d399','#f472b6','#c084fc','#fcd34d'
    {
      title: "…",
      places: { key: {n, r, cc, lat, lon, off, c?, lbl?} },
-     legs:   [ {id?, mode, from, to, dep, arr, title?, op?, warn?, det?} ],
-     stays:  [ {id?, place, name, addr?, lat?, lon?, in, out, det?} ],
-     events: [ {id?, kind?, place, title, start, end?, lat?, lon?, addr?, det?, warn?, off?} ],
+     legs:   [ {id?, mode, from, to, dep, arr, title?, op?, conf?, seat?, phone?, depAddr?, arrAddr?, warn?, det?} ],
+     stays:  [ {id?, place, name, addr?, phone?, conf?, lat?, lon?, in, out, warn?, det?} ],
+     events: [ {id?, kind?, place, title, start, end?, lat?, lon?, addr?, phone?, conf?, det?, warn?, off?} ],
      focus:  [placeKeys]?          // what the FOCUS map button fits
      calendarOffset: minutes?      // which clock defines "a day" in the calendar
    }
@@ -131,7 +131,8 @@ function buildModel(raw){
     if(!P.c) P.c=PLACE_PALETTE[i%PLACE_PALETTE.length];
   });
 
-  const LEGS=(Array.isArray(cfg.legs)?cfg.legs:[]).map(l=>Object.assign({},l));
+  /* srcIndex points back into the config arrays so the viewer can edit the raw entry */
+  const LEGS=(Array.isArray(cfg.legs)?cfg.legs:[]).map((l,i)=>Object.assign({},l,{srcIndex:i}));
   if(!LEGS.length) throw new Error('The config needs at least one entry in "legs".');
   LEGS.forEach((l,i)=>{
     if(!l.id) l.id='L'+(i+1);
@@ -149,7 +150,7 @@ function buildModel(raw){
   });
   LEGS.sort((a,b)=>a.t0-b.t0);
 
-  const STAYS=(Array.isArray(cfg.stays)?cfg.stays:[]).map(s=>Object.assign({},s));
+  const STAYS=(Array.isArray(cfg.stays)?cfg.stays:[]).map((s,i)=>Object.assign({},s,{srcIndex:i}));
   STAYS.forEach((s,i)=>{
     if(!s.id) s.id='S'+(i+1);
     if(!PLACES[s.place]) throw new Error('Stay '+s.id+' ("'+(s.name||'?')+'"): unknown place "'+s.place+'".');
@@ -159,12 +160,13 @@ function buildModel(raw){
     if(!isFinite(s.t1)) throw new Error('Stay '+s.id+': "out" is not a parseable date ("'+s.out+'").');
     if(s.t1<=s.t0) throw new Error('Stay '+s.id+' checks out before (or when) it checks in.');
     if(!s.name) s.name='Stay in '+s.P.n;
+    s.pin=s.lat!=null&&s.lon!=null;
     if(s.lat==null) s.lat=s.P.lat; else s.lat=+s.lat;
     if(s.lon==null) s.lon=s.P.lon; else s.lon=+s.lon;
   });
   STAYS.sort((a,b)=>a.t0-b.t0);
 
-  const EVENTS=(Array.isArray(cfg.events)?cfg.events:[]).map(e=>Object.assign({},e));
+  const EVENTS=(Array.isArray(cfg.events)?cfg.events:[]).map((e,i)=>Object.assign({},e,{srcIndex:i}));
   EVENTS.forEach((e,i)=>{
     if(!e.id) e.id='E'+(i+1);
     if(!e.kind) e.kind='activity';
@@ -272,7 +274,7 @@ function buildModel(raw){
   STAYS.forEach(s=>{
     const off=s.P.off, nn=nights(s.t0,s.t1);
     ITEMS.push({id:s.id+'i', t0:s.t0, t1:s.t0, off, cls:'stay', color:MODE_COLOR.stay, icon:ICON.bed,
-      title:'Check in · '+s.name, place:s.place, sub:s.addr||'', det:s.det,
+      title:'Check in · '+s.name, place:s.place, sub:s.addr||'', det:s.det, warn:s.warn,
       tags:[nn+' night'+(nn>1?'s':''), 'out '+fmt(s.t1,off,'d')+' '+fmt(s.t1,off,'t')], ref:s});
     ITEMS.push({id:s.id+'o', t0:s.t1, t1:s.t1, off, cls:'stay', color:MODE_COLOR.stay, icon:ICON.out,
       title:'Check out · '+s.name, place:s.place, sub:s.addr||'', tags:[nn+' night'+(nn>1?'s':'')+' done'], ref:s});
@@ -500,6 +502,18 @@ const TZ_ABBR={
   PST:-480, PDT:-420, AKST:-540, AKDT:-480, HST:-600,
   AST:-240, ADT:-180, NST:-210, NDT:-150
 };
+
+/* booking references and phone numbers, as whole lines ("Confirmation #: ABC123")
+   and inside free-text notes. Shared by the importer and the viewer's detail card. */
+const CONF_LABEL='(?:confirmation|conf\\.?|booking|reservation|record\\s+locator|pnr|reference|ref\\.?)'+
+  '(?:\\s*(?:#|no\\.?|number|code|id|ref(?:erence)?))?\\s*[:#]*\\s*';
+const CONF_LINE_RE=new RegExp('^'+CONF_LABEL+'([A-Z0-9][A-Z0-9-]{3,})\\s*$','i');
+const CONF_ANY_RE=new RegExp('\\b'+CONF_LABEL+'([A-Z0-9][A-Z0-9-]{3,})\\b','i');
+const PHONE_LABEL='(?:phone|tel\\.?|telephone|mobile|call)\\s*[:#]?\\s*';
+const PHONE_LINE_RE=new RegExp('^'+PHONE_LABEL+'(\\+?[\\d(][\\d\\s().-]{5,}\\d)\\s*$','i');
+const PHONE_ANY_RE=new RegExp('(?:\\b'+PHONE_LABEL+'(\\+?[\\d(][\\d\\s().-]{5,}\\d))|(\\+\\d[\\d\\s().-]{6,}\\d)','i');
+/* a real booking code has a digit or is written in capitals ("Confirmation email" is not one) */
+function looksLikeCode(s){ return /\d/.test(s) || s===s.toUpperCase(); }
 
 function parseItineraryText(text){
   const report=[], places={};
@@ -752,7 +766,8 @@ function parseItineraryText(text){
     }
     if(note) report.push('"'+title+'": '+note+' — fix "arr" in the draft.');
     const rec={mode:t.mode, from:fk, to:tk, dep:depIso, arr:isoFromTs(arrTs,arrOff),
-               title:title, op:t.op||'', det:t.det||[]};
+               title:title, op:t.op||'', det:t.det||[], conf:t.conf, phone:t.phone,
+               depAddr:t.fromAddr, arrAddr:t.toAddr};
     legsRaw.push(rec);
     curKey=tk;
     detTarget=rec;
@@ -877,6 +892,16 @@ function parseItineraryText(text){
     m=line.match(/^check[\s-]?out\b:?\s*(.*)$/i);
     if(m){ handleCheckOut(m[1]); return; }
 
+    // "Confirmation #: ABC123" / "Phone: +49 …" become structured fields on whatever came last
+    m=line.match(CONF_LINE_RE);
+    if(m&&!pendingTime&&detTarget&&!detTarget.conf&&looksLikeCode(m[1])){
+      detTarget.conf=m[1]; if(detTarget.expectAddr) detTarget.expectAddr=false; return;
+    }
+    m=line.match(PHONE_LINE_RE);
+    if(m&&!pendingTime&&detTarget&&!detTarget.phone){
+      detTarget.phone=m[1].trim(); if(detTarget.expectAddr) detTarget.expectAddr=false; return;
+    }
+
     // flight routes: "PHX → DTW" / "PHX to DTW"
     m=line.match(/^([A-Z]{3})\s*(?:→|->|—|–|-|to)\s*([A-Z]{3})$/);
     if(m&&m[1]!==m[2]){
@@ -912,6 +937,7 @@ function parseItineraryText(text){
       if(!trans&&act){ // "Saba Driver To Mestia" + Depart/Arrive lines → it was a transfer, not an activity
         const parts=splitTitle(act.title);
         trans={isFlight:false, mode:groundMode(act.title), op:'', title:act.title, det:act.det,
+               conf:act.conf, phone:act.phone,
                fromTitle:parts[0]||'', toTitle:parts[1]||'',
                depD:act.d, depT:act.t, depOff:act.off};
         act=null;
@@ -1003,6 +1029,10 @@ function parseItineraryText(text){
   const legs=legsRaw.map(r=>{
     const o={mode:r.mode, from:r.from, to:r.to, dep:r.dep, arr:r.arr, title:r.title};
     if(r.op) o.op=r.op;
+    if(r.conf) o.conf=r.conf;
+    if(r.phone) o.phone=r.phone;
+    if(r.depAddr) o.depAddr=r.depAddr;
+    if(r.arrAddr) o.arrAddr=r.arrAddr;
     if(r.det.length) o.det=r.det.join('\n');
     return o;
   });
@@ -1022,6 +1052,8 @@ function parseItineraryText(text){
     if(Date.parse(outIso)<=Date.parse(inIso)){ outIso=isoFromTs(Date.parse(inIso)+DAY,inOff); report.push('Stay "'+st.name+'": check-out was not after check-in — assumed 1 night.'); }
     const o={place:pk, name:st.name, "in":inIso, out:outIso};
     if(st.addr) o.addr=st.addr;
+    if(st.phone) o.phone=st.phone;
+    if(st.conf) o.conf=st.conf;
     if(st.det.length) o.det=st.det.join('\n');
     stays.push(o);
   });
@@ -1041,6 +1073,8 @@ function parseItineraryText(text){
       if(ets>=Date.parse(o.start)) o.end=isoFromTs(ets,eoff);
     }
     if(a.addr) o.addr=a.addr;
+    if(a.phone) o.phone=a.phone;
+    if(a.conf) o.conf=a.conf;
     if(a.off!=null&&places[pk]&&a.off!==places[pk].off) o.off=a.off;
     if(a.det.length) o.det=a.det.join('\n');
     events.push(o);
