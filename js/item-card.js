@@ -126,13 +126,12 @@ function legCard(it){
   const body=route+warnBlock(l.warn)+
     tiles([
       ['Distance',Math.round(l.km).toLocaleString()+' km'],
-      tz?['Time change',(tz>0?'+':'−')+Math.abs(tz)/60+' h']:null,
-      gap?['Unplanned',dur(l.t1-l.t0)]:null
+      tz?['Time change',(tz>0?'+':'−')+Math.abs(tz)/60+' h']:null
     ]);
   let rows='';
   const n2=fromNotes(l.det), conf=l.conf||n2.conf, phone=l.phone||n2.phone;
   if(conf) rows+=copyRow('Confirmation / PNR',conf,LINE_ICON.ticket,{mono:true,big:true,note:l.conf?'':'from notes'});
-  if(l.op) rows+=copyRow(l.mode==='flight'?'Flight':'Operator',l.op,l.mode==='flight'?LINE_ICON.hash:LINE_ICON.ticket);
+  if(l.op && !gap) rows+=copyRow(l.mode==='flight'?'Flight':'Operator',l.op,l.mode==='flight'?LINE_ICON.hash:LINE_ICON.ticket);
   if(l.seat) rows+=copyRow('Seat',l.seat,LINE_ICON.seat);
   if(l.depAddr) rows+=copyRow('Departs from',l.depAddr,LINE_ICON.pin);
   if(l.arrAddr) rows+=copyRow('Arrives at',l.arrAddr,LINE_ICON.pin);
@@ -214,7 +213,7 @@ function cardHead(it,v){
   return '<header class="sc-head">'+
     '<div class="grab"></div>'+
     '<div class="kick"><span class="badge">'+solid(it.icon)+esc(v.kicker)+'</span>'+
-      '<span class="day">Day '+M.dayNo(it.t0)+' · '+fmt(it.t0,it.off,'d')+'</span>'+
+      '<span class="daylbl">Day '+M.dayNo(it.t0)+' · '+fmt(it.t0,it.off,'d')+'</span>'+
       '<button type="button" class="x" data-close title="Close (Esc)" aria-label="Close">'+ico(LINE_ICON.close)+'</button></div>'+
     '<h2 id="scTitle">'+esc(v.title)+'</h2>'+
     (v.sub?'<div class="sub">'+esc(v.sub)+'</div>':'')+
