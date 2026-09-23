@@ -41,17 +41,19 @@ in the editor's **Schema help** tab; the short version:
   "legs": [                      // the spine — each leg starts where the last ended
     {"mode":"flight","from":"sea","to":"tyo",
      "dep":"2026-09-05T10:45:00-07:00","arr":"2026-09-06T13:10:00+09:00",
-     "title":"SEA → NRT","op":"Example Air 810","warn":"…","det":"…"}
+     "title":"SEA → NRT","op":"Example Air 810","conf":"EXQ7R2","seat":"32K","warn":"…","det":"…"}
+    // optional on legs: phone, depAddr/arrAddr (where you board / get off)
     // modes: flight · bus · car · train · ferry · gap (gap = unbooked stretch, drawn dashed)
   ],
   "stays": [                     // lodging; lat/lon optional (pins appear at street zoom)
     {"place":"tyo","name":"Shinjuku Garden Hotel","addr":"…",
-     "in":"2026-09-06T15:00:00+09:00","out":"2026-09-10T11:00:00+09:00","det":"…"}
+     "in":"2026-09-06T15:00:00+09:00","out":"2026-09-10T11:00:00+09:00",
+     "phone":"+81 3-5555-0100","conf":"SGH-240906","det":"…"}
   ],
   "events": [                    // kind: activity | note | gapnote
     {"kind":"activity","place":"tyo","title":"teamLab Planets",
      "start":"2026-09-08T17:00:00+09:00","end":"2026-09-08T19:00:00+09:00",
-     "lat":35.649,"lon":139.789,"addr":"Toyosu","warn":"…","det":"…"}
+     "lat":35.649,"lon":139.789,"addr":"Toyosu","conf":"…","phone":"…","warn":"…","det":"…"}
   ],
   "focus": ["tyo","kyo"],        // optional: what the map's Focus button fits
   "calendarOffset": 540          // optional: which clock defines a calendar "day"
@@ -61,6 +63,22 @@ in the editor's **Schema help** tab; the short version:
 The editor also accepts a relaxed JS object literal (unquoted keys, trailing commas),
 so data lifted out of an old `<script>` block pastes straight in — hit **Format** to
 normalize it to JSON.
+
+## Item cards
+
+Clicking anything in the itinerary list (or a route, pin or journey-chart mark) opens a
+card laid out for that kind of item: the route with departure/arrival times and any
+day change for legs, check-in → check-out for stays, start → end for activities, plus a
+live status ("Departs in 3 days", "En route · 2 h to go"). Confirmation numbers, seats,
+flight numbers, addresses and phone numbers are tap-to-copy. When a leg/stay/event has no
+`conf` / `phone` field, the card looks for one in its notes (e.g. "Confirmation #ABC123",
+"Phone: +49 …") and labels it "from notes".
+
+Bottom-left: **Directions** (Google Maps, to the pin, address, `depAddr` or departure
+airport) and **Call** when there is a phone number. Bottom-right: **Edit**, which edits the
+item's text fields and times in place and saves to the trip library. Editing the demo trip
+or a dropped file saves it as a new trip in your browser first. Places, modes and ordering
+are still edited in the full editor.
 
 ## How map locations are determined
 
@@ -103,6 +121,8 @@ array on each place.)
 index.html         viewer page (markup + styles)
 editor.html        editor page (markup + styles + schema docs)
 js/viewer.js       viewer app — renders whatever config is loaded
+js/item-card.js    viewer's item detail card — per-type layouts, copy, directions,
+                   in-place editing
 js/editor.js       editor app — validation UI, trip library, text import
 js/trip-core.js    shared: helpers, schema normalization/validation, model
                    building, localStorage library, itinerary-text importer
