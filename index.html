@@ -78,7 +78,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 }
 .editbtn:hover{color:#fff;border-color:#3a4b78}
 .editbtn svg{width:11px;height:11px}
-.stats{grid-area:stats;display:flex;gap:8px;flex-wrap:nowrap;min-width:0;overflow-x:auto;scrollbar-width:none}
+.stats{grid-area:stats;justify-self:end;max-width:100%;display:flex;gap:8px;flex-wrap:nowrap;min-width:0;overflow-x:auto;scrollbar-width:none}
 .stats::-webkit-scrollbar{display:none}
 .stat{
   background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
@@ -327,7 +327,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   .side{height:78vh}
   .topbar{grid-template-columns:minmax(0,1fr);grid-template-areas:"brand" "stats" "tabs";padding:10px 10px 8px;gap:10px}
   .brand h1{font-size:15px}
-  .stats{padding-bottom:3px;-webkit-overflow-scrolling:touch}
+  .stats{justify-self:stretch;padding-bottom:3px;-webkit-overflow-scrolling:touch}
   .stat{min-width:0;padding:4px 10px}
   .transport{grid-template-columns:1fr;gap:8px;position:sticky;bottom:0;z-index:30;padding:8px 10px 10px;
     background:rgba(10,16,32,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line-soft)}
