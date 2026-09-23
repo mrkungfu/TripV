@@ -623,17 +623,22 @@ function buildHeader(){
   const countries=new Set(M.placeKeys.map(k=>M.PLACES[k].cc||'?')).size;
   const flights=M.LEGS.filter(l=>l.mode==='flight').length;
   const ground=M.LEGS.filter(l=>GROUND_MODES.has(l.mode)).length;
-  const gaps=M.LEGS.filter(l=>l.mode==='gap').length;
-  const acts=M.EVENTS.filter(e=>e.kind==='activity').length;
   const rows=[
     [M.TOTAL_DAYS,'days'],[countries,'countries'],[M.placeKeys.length,'places'],
     [(km>=1500? Math.round(km/1000)+'k' : Math.round(km)),'km'],[flights,'flights'],[ground,'ground'],
-    [M.STAYS.length,'stays'],[acts,'booked'],[gaps,'gaps']
+    [M.STAYS.length,'stays']
   ];
   $('#stats').innerHTML=rows.map(r=>'<div class="stat"><b>'+r[0]+'</b><span>'+r[1]+'</span></div>').join('');
-  $('#brandTitle').textContent=M.title;
-  $('#brandSub').textContent=fmt(M.T0,M.originOff,'D')+'  →  '+fmt(M.T1,M.originOff,'D')+'  ·  '+M.TOTAL_DAYS+' days';
+  $('#tripSel').title=M.title+' — switch between trips saved in this browser';
+  $('#brandSub').textContent=fmt(M.T0,M.originOff,'D')+'  →  '+fmt(M.T1,M.originOff,'D');
   document.title=M.title+' · Trip visualizer';
+  fitHeader();
+}
+/* stats share the top row only when they fit whole; otherwise they get a row of their own */
+function fitHeader(){
+  const bar=$('.topbar'), st=$('#stats');
+  bar.classList.remove('stats-below');
+  if(st.scrollWidth>st.clientWidth+1) bar.classList.add('stats-below');
 }
 
 /* ============================================================
@@ -890,6 +895,7 @@ function bindUI(){
   /* resize */
   let rz=null;
   addEventListener('resize',()=>{
+    fitHeader();
     clearTimeout(rz);
     rz=setTimeout(()=>{
       if(currentView==='map'){ fitTo(); if(follow) centerOnTraveler(); else applyView(); }
@@ -897,6 +903,12 @@ function bindUI(){
       if(currentView==='journey') drawJourney();
     },120);
   });
+
+  /* the time/location readout sits in the header on wide screens, next to the scrubber on narrow ones */
+  const narrow=matchMedia('(max-width:940px)'), readout=$('.readout');
+  const placeReadout=()=>{ (narrow.matches? $('.transport') : $('.topbar')).appendChild(readout); fitHeader(); };
+  narrow.addEventListener('change',placeReadout);
+  placeReadout();
 
   /* trip selector + drag-and-drop loading */
   $('#tripSel').addEventListener('change',e=>loadByName(e.target.value));
@@ -915,6 +927,7 @@ function bindUI(){
         if(!opt){ opt=document.createElement('option'); opt.value='__dropped'; sel.appendChild(opt); }
         opt.textContent='(file) '+f.name;
         sel.value='__dropped';
+        fitHeader();
       }catch(err){ alert('Could not load "'+f.name+'": '+err.message); }
     };
     rd.readAsText(f);
