@@ -380,7 +380,7 @@ function buildCalendar(){
   $('#calGrid').innerHTML=html;
   $('#calLegend').innerHTML=M.placeKeys.map(k=>
     '<span><i style="background:'+M.PLACES[k].c+'"></i>'+esc(M.PLACES[k].n)+'</span>').join('')+
-    '<span><i style="background:#4b5876"></i>faded = nothing booked</span>';
+    '<span><i style="background:#4b5876"></i>faded number = nothing booked</span>';
   buildChapters();
   calCurDay=null; calCurChap=null;
   updateCalendar(now);
