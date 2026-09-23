@@ -414,11 +414,13 @@ function dayBand(dayStart){
 /* follow the playhead: highlight its day, and mark chapters as past / current */
 let calCurDay=null, calCurChap=null, calLiveChap=null, chapStarts=[];
 function updateCalendar(ts){
-  const day=$$('#calGrid .day.in').find(d=>ts>=+d.dataset.d0&&ts<+d.dataset.d0+DAY)||null;
+  const days=$$('#calGrid .day.in');
+  const day=days.find(d=>ts>=+d.dataset.d0&&ts<+d.dataset.d0+DAY)||null;
   if(day!==calCurDay){
     if(calCurDay) calCurDay.classList.remove('cur');
     if(day) day.classList.add('cur');
     calCurDay=day;
+    days.forEach(d=>d.classList.toggle('before',+d.dataset.d0+DAY<=ts));
   }
   const chapAt=t=>{ let k=-1; chapStarts.forEach((s,i)=>{ if(t>=s) k=i; }); return k; };
   const cur=chapAt(ts);
