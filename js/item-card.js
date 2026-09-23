@@ -100,6 +100,17 @@ function contactRows(src,det,skipAddr){
   if(phone) h+=copyRow('Phone',phone,LINE_ICON.phone,{note:src.phone?'':'from notes'});
   return {html:h, phone};
 }
+/* middle divider: dotted before, progress bar while under way, solid with a filled end dot once done */
+function midTrack(t0,t1,icon,color,opts){
+  opts=opts||{};
+  const p=clamp((Date.now()-t0)/Math.max(1,t1-t0),0,1);
+  const state=p<=0?'pre':p>=1?'done':'live';
+  return '<div class="ep-mid"><div class="track '+state+(opts.gap?' gap':'')+'"><i style="width:'+(p*100).toFixed(1)+'%"></i>'+
+      '<span class="plane'+(opts.fly?' fly':'')+'" style="left:'+(state==='live'?(p*100).toFixed(1):50)+'%">'+solid(icon,color)+'</span></div>'+
+    '<span class="du">'+esc(opts.label)+'</span>'+
+    (opts.km?'<span class="km">'+Math.round(opts.km).toLocaleString()+' km</span>':'')+
+  '</div>';
+}
 function warnBlock(w){ return w? '<div class="sc-warn">'+ico(LINE_ICON.warn)+'<div>'+esc(w)+'</div></div>' : ''; }
 function notesBlock(d){ return d? '<section class="sc-notes"><h4>Notes</h4><p>'+esc(d)+'</p></section>' : ''; }
 
@@ -107,7 +118,6 @@ function notesBlock(d){ return d? '<section class="sc-notes"><h4>Notes</h4><p>'+
 function legCard(it){
   const l=it.ref, A=l.A, B=l.B, codes=flightCodes(l), gap=l.mode==='gap';
   const shift=dayShift(l.t0,A.off,l.t1,B.off);
-  const n=Date.now(), p=clamp((n-l.t0)/Math.max(1,l.t1-l.t0),0,1);
   const ep=(P,code,t,off,side,extra)=>
     '<div class="ep '+side+'">'+
       '<div class="code'+(code?'':' long')+'">'+esc(code||P.n)+'</div>'+
@@ -117,15 +127,12 @@ function legCard(it){
     '</div>';
   const route='<div class="route-blk">'+
     ep(A,codes&&codes[0],l.t0,A.off,'from')+
-    '<div class="ep-mid"><div class="track'+(gap?' gap':'')+'"><i style="width:'+(p*100).toFixed(1)+'%"></i>'+
-      '<span class="plane'+(l.mode==='flight'?' fly':'')+'" style="left:'+(p>0&&p<1?(p*100).toFixed(1):50)+'%">'+solid(it.icon,it.color)+'</span></div>'+
-      '<span class="du">'+dur(l.t1-l.t0)+'</span></div>'+
+    midTrack(l.t0,l.t1,it.icon,it.color,{gap, fly:l.mode==='flight', label:dur(l.t1-l.t0), km:l.km>=0.5?l.km:0})+
     ep(B,codes&&codes[1],l.t1,B.off,'to',shift?'<sup>'+(shift>0?'+':'−')+Math.abs(shift)+'</sup>':'')+
   '</div>';
   const tz=B.off-A.off;
   const body=route+warnBlock(l.warn)+
     tiles([
-      ['Distance',Math.round(l.km).toLocaleString()+' km'],
       tz?['Time change',(tz>0?'+':'−')+Math.abs(tz)/60+' h']:null
     ]);
   let rows='';
@@ -157,12 +164,9 @@ function stayCard(it){
     '<div class="ep '+side+'"><div class="lbl">'+lbl+'</div>'+
       '<div class="tm big">'+fmt(t,P.off,'t')+'</div>'+
       '<div class="dt">'+fmt(t,P.off,'d')+' · '+tzLabel(P.off)+'</div></div>';
-  const n=Date.now(), p=clamp((n-s.t0)/Math.max(1,s.t1-s.t0),0,1);
   const blk='<div class="route-blk stay">'+
     col('Check-in',s.t0,'from'+(isOut?'':' hl'))+
-    '<div class="ep-mid"><div class="track"><i style="width:'+(p*100).toFixed(1)+'%"></i>'+
-      '<span class="plane" style="left:'+(p>0&&p<1?(p*100).toFixed(1):50)+'%">'+solid(ICON.bed,it.color)+'</span></div>'+
-      '<span class="du">'+nn+' night'+(nn>1?'s':'')+'</span></div>'+
+    midTrack(s.t0,s.t1,ICON.bed,it.color,{label:nn+' night'+(nn>1?'s':'')})+
     col('Check-out',s.t1,'to'+(isOut?' hl':''))+
   '</div>';
   const c=contactRows(s,s.det);
@@ -187,7 +191,7 @@ function eventCard(it){
     const shift=dayShift(e.t0,off,e.t1,off);
     blk='<div class="route-blk event">'+
       '<div class="ep from"><div class="lbl">Starts</div><div class="tm big">'+fmt(e.t0,off,'t')+'</div><div class="dt">'+fmt(e.t0,off,'d')+' · '+tzLabel(off)+'</div></div>'+
-      '<div class="ep-mid"><div class="track"><span class="plane" style="left:50%">'+solid(it.icon,it.color)+'</span></div><span class="du">'+dur(e.t1-e.t0)+'</span></div>'+
+      midTrack(e.t0,e.t1,it.icon,it.color,{label:dur(e.t1-e.t0)})+
       '<div class="ep to"><div class="lbl">Ends</div><div class="tm big">'+fmt(e.t1,off,'t')+(shift?'<sup>+'+shift+'</sup>':'')+'</div><div class="dt">'+fmt(e.t1,off,'d')+'</div></div>'+
     '</div>';
   } else {
