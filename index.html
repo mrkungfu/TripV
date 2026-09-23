@@ -376,13 +376,16 @@ body.sheet-open{overflow:hidden}
 .route-blk.stay .ep-mid,.route-blk.event .ep-mid{padding-top:14px}
 .ep-mid .track{position:relative;width:100%;height:22px}
 .ep-mid .track::before{content:'';position:absolute;left:0;right:0;top:10px;border-top:2px dotted var(--line)}
-.ep-mid .track::after{content:'';position:absolute;right:-2px;top:7px;width:8px;height:8px;border-radius:50%;border:2px solid var(--line);background:var(--panel)}
+.ep-mid .track::after{content:'';position:absolute;right:-2px;top:6px;box-sizing:border-box;width:10px;height:10px;border-radius:50%;border:2px solid var(--line);background:var(--panel)}
+.ep-mid .track.live::after{display:none}
+.ep-mid .track.done::after{border-color:var(--c);background:var(--c)}
 .ep-mid .track i{position:absolute;left:0;top:10px;height:2px;background:var(--c);border-radius:2px}
 .ep-mid .track.gap i{background:repeating-linear-gradient(90deg,var(--c) 0 4px,transparent 4px 8px)}
 .ep-mid .plane{position:absolute;top:0;width:24px;height:22px;margin-left:-12px;display:flex;align-items:center;justify-content:center;background:var(--panel)}
 .ep-mid .plane svg{width:18px;height:18px}
 .ep-mid .plane.fly svg{transform:rotate(90deg)}
 .ep-mid .du{font-size:11.5px;color:var(--txt-dim);margin-top:5px;white-space:nowrap}
+.ep-mid .km{font-size:11px;color:var(--txt-faint);margin-top:1px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .when-blk{display:flex;align-items:center;gap:13px;margin:0 0 16px}
 .when-blk .ic{width:44px;height:44px;border-radius:13px;background:var(--c2);display:flex;align-items:center;justify-content:center;flex:none}
 .when-blk .ic svg{width:22px;height:22px}
