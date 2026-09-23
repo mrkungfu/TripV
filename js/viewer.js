@@ -895,7 +895,8 @@ function bindUI(){
      every rebuild, stacking duplicate handlers) */
   $('#calGrid').addEventListener('click',e=>{
     const d=e.target.closest('.day.in'); if(!d) return;
-    setNow(clamp(+d.dataset.t,M.T0,M.T1));
+    if(d.classList.contains('today')) jumpToNow();
+    else setNow(clamp(+d.dataset.t,M.T0,M.T1));
   });
   $('#calGrid').addEventListener('pointerover',e=>{
     const d=e.target.closest('.day.in'); if(!d) return;
@@ -910,7 +911,8 @@ function bindUI(){
   $('#calGrid').addEventListener('pointerout',hideTip);
   $('#chapters').addEventListener('click',e=>{
     const c=e.target.closest('.chapter'); if(!c) return;
-    setNow(+c.dataset.t); if(currentView!=='calendar') setView('map');
+    if(c.classList.contains('live')) jumpToNow(); else setNow(+c.dataset.t);
+    if(currentView!=='calendar') setView('map');
   });
 
   /* itinerary list */
