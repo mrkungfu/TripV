@@ -595,6 +595,22 @@ function jumpToNow(opts){
   setNow(clamp(t,M.T0,M.T1), false, {live:true, force:true});
   if(opts&&opts.announce && (t<M.T0||t>M.T1)) flash($('#toNow'), t<M.T0?'not yet':'trip over');
 }
+/* while "now" is live, follow the wall clock — refreshed on each minute boundary */
+let liveTimer=null, liveDay=null;
+function refreshLive(){
+  if(!M || !liveNow || playing) return;
+  const day=calDayStart(Date.now());
+  if(day!==liveDay){
+    // "today" markers and "(Nd)" labels are baked into the calendar, scrubber and list
+    liveDay=day;
+    buildCalendar(); buildScrubMarks(); renderList();
+  }
+  setNow(clamp(Date.now(),M.T0,M.T1), false, {live:true});
+}
+function scheduleLiveTick(){
+  clearTimeout(liveTimer);
+  liveTimer=setTimeout(()=>{ refreshLive(); scheduleLiveTick(); }, MIN-Date.now()%MIN+50);
+}
 function render(listForce){
   updateRoutes(now);
   placePuck();
@@ -709,6 +725,7 @@ function loadTrip(cfg,opts){
     filter='all'; $$('#filters button').forEach(b=>b.classList.toggle('on',b.dataset.f==='all'));
   }
 
+  liveDay=calDayStart(Date.now());
   buildHeader();
   buildMapLayers();
   buildCalendar();
@@ -1013,4 +1030,9 @@ bindUI();
     populateTripSel('__demo');
     loadByName('__demo');
   }
+  scheduleLiveTick();
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden) return;
+    refreshLive(); scheduleLiveTick();
+  });
 })();
