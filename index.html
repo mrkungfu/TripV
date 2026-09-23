@@ -146,12 +146,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .day.open .num{color:#7b89aa}
 .day .evd{display:flex;gap:2px}
 .day .evd i{width:3.5px;height:3.5px;border-radius:50%;background:rgba(11,17,32,.7)}
-.day.today::after{content:'';position:absolute;top:3px;right:3px;width:4px;height:4px;border-radius:50%;background:var(--flight)}
+.day.in.before:not(:hover){border-color:rgba(255,255,255,.03)}
 .day.in.cur{
   z-index:2;transform:scale(1.14);background:#34466f;border-color:transparent;color:#fff;font-weight:750;
   box-shadow:0 0 0 2px #fff,0 0 0 4px rgba(247,185,85,.55),0 6px 18px rgba(0,0,0,.55);
 }
 .day.cur.open .num{color:#fff}
+.day.in.today .num{color:var(--flight)}
 .calnote{margin-top:16px;font-size:11.5px;color:var(--txt-faint);max-width:760px;line-height:1.6}
 .chapheading{margin:26px 0 12px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--txt-dim);font-weight:600}
 .chapters{display:flex;gap:10px;flex-wrap:wrap}
@@ -587,7 +588,7 @@ body.sheet-open{overflow:hidden}
             Each square is one day. The strip along its bottom is coloured by the town you're in, and on travel days it
             splits left to right at about the hour you move. Dots count the scheduled items on that day. A faded day number means
             nothing is booked that day, one of the open stretches of the trip. The raised square is the day the page is
-            showing, and the small amber dot marks today. Click any day to move the whole page to it.
+            showing, and today's day number is amber. Click any day to move the whole page to it.
           </div>
           <h2 class="chapheading">The trip in chapters</h2>
           <div class="chapters" id="chapters"></div>
