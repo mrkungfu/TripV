@@ -69,7 +69,8 @@ normalize it to JSON.
 Clicking anything in the itinerary list (or a route, pin or journey-chart mark) opens a
 card laid out for that kind of item: the route with departure/arrival times and any
 day change for legs, check-in → check-out for stays, start → end for activities, plus a
-live status ("Departs in 3 days", "En route · 2 h to go"). Confirmation numbers, seats,
+live status ("Departs in 3 days", "En route · 2 h to go"); while an open card's item is
+under way, its status and progress bar refresh on each minute boundary. Confirmation numbers, seats,
 flight numbers, addresses and phone numbers are tap-to-copy. When a leg/stay/event has no
 `conf` / `phone` field, the card looks for one in its notes (e.g. "Confirmation #ABC123",
 "Phone: +49 …") and labels it "from notes".
