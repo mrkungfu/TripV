@@ -8,7 +8,7 @@
    curName, loadTrip, populateTripSel) at call time.
    ============================================================ */
 
-let cardItem=null, cardEditing=false, cardReturnFocus=null, toastTimer=null;
+let cardItem=null, cardEditing=false, cardReturnFocus=null, toastTimer=null, cardTimer=null;
 const sheet=$('#sheet'), sheetCard=$('#sheetCard');
 
 const LINE_ICON={
@@ -224,9 +224,13 @@ function cardHead(it,v){
     (v.status&&v.status.txt?'<div class="status '+v.status.cls+'"><i></i>'+esc(v.status.txt)+'</div>':'')+
   '</header>';
 }
+function cardView(it){
+  const kind=itemKind(it);
+  return kind==='leg'?legCard(it):kind==='stay'?stayCard(it):eventCard(it);
+}
 function renderCard(){
-  const it=cardItem, kind=itemKind(it);
-  const v=kind==='leg'?legCard(it):kind==='stay'?stayCard(it):eventCard(it);
+  const it=cardItem, v=cardView(it);
+  scheduleCardTick();
   let actions='';
   if(v.dest) actions+='<a class="sc-btn primary" href="'+esc(mapsUrl(v.dest))+'" target="_blank" rel="noopener" title="Directions to '+esc(v.destLbl)+'">'+ico(LINE_ICON.nav)+'Directions</a>';
   if(v.phone) actions+='<a class="sc-btn'+(v.dest?' icon':' primary')+'" href="'+esc(telHref(v.phone))+'" title="Call '+esc(v.phone)+'" aria-label="Call">'+ico(LINE_ICON.phone)+(v.dest?'':'Call')+'</a>';
@@ -234,6 +238,23 @@ function renderCard(){
     '<div class="sc-body">'+v.body+'</div>'+
     '<footer class="sc-foot">'+actions+'<span class="sp"></span>'+
       '<button type="button" class="sc-btn" data-edit>'+ico(LINE_ICON.edit)+'Edit</button></footer>';
+}
+/* while the open item is under way, refresh its status and progress track on each minute
+   boundary; patched in place so scroll position, focus and an open editor survive */
+function refreshCardLive(){
+  if(!cardItem) return;
+  const v=cardView(cardItem), tmp=document.createElement('div');
+  tmp.innerHTML=cardHead(cardItem,v)+v.body;
+  [['.sc-head .status','.status'],['.sc-body .ep-mid','.ep-mid']].forEach(([sel,src])=>{
+    const cur=sheetCard.querySelector(sel), nxt=tmp.querySelector(src);
+    if(cur && nxt) cur.replaceWith(nxt);
+  });
+}
+function scheduleCardTick(){
+  clearTimeout(cardTimer); cardTimer=null;
+  const r=cardItem && cardItem.ref, n=Date.now();
+  if(!r || !(r.t1>r.t0) || n<r.t0 || n>=r.t1) return;
+  cardTimer=setTimeout(()=>{ refreshCardLive(); scheduleCardTick(); }, MIN-n%MIN+50);
 }
 function styleCard(it){
   sheetCard.style.setProperty('--c',it.color);
@@ -255,6 +276,7 @@ function openCard(id){
 }
 function closeCard(){
   if(!cardItem) return;
+  clearTimeout(cardTimer); cardTimer=null;
   cardItem=null; cardEditing=false;
   sheet.classList.remove('on'); sheet.setAttribute('aria-hidden','true');
   document.body.classList.remove('sheet-open');
