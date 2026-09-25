@@ -622,16 +622,15 @@ body.sheet-open{overflow:hidden}
 
   <footer class="transport">
     <div class="playgrp">
+      <button class="mini" id="stepBack" title="Previous item (←)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 6v12L2 12zm11 0v12l-9-6z"/></svg></button>
       <button class="play" id="play" title="Play / pause (space)">
         <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
       </button>
-      <button class="mini" id="stepBack" title="Back 6 h (←)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 6v12L2 12zm11 0v12l-9-6z"/></svg></button>
-      <button class="mini" id="stepFwd" title="Forward 6 h (→)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 6v12l9-6zM2 6v12l9-6z"/></svg></button>
+      <button class="mini" id="stepFwd" title="Next item (→)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 6v12l9-6zM2 6v12l9-6z"/></svg></button>
       <div class="speed" id="speed">
         <button data-s="0.5">½×</button>
         <button data-s="1" class="on">1×</button>
         <button data-s="3">3×</button>
-        <button data-s="8">8×</button>
       </div>
       <button class="mini" id="toNow" title="Jump to right now" style="width:auto;padding:0 10px;font-size:11px;letter-spacing:.05em">NOW</button>
     </div>

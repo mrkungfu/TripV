@@ -661,6 +661,17 @@ function tick(t){
   if(now>=M.T1){ togglePlay(); return; }
   raf=requestAnimationFrame(tick);
 }
+/* step to the start of the next / previous item in the (filtered) itinerary list;
+   stepping back from partway through an item lands on that item's start first */
+function stepItem(dir){
+  const times=(CARDS.length? CARDS.map(c=>c.t) : M.ITEMS.map(it=>it.t0)).sort((a,b)=>a-b);
+  let t=null;
+  if(dir>0){ for(const x of times) if(x>now+1){ t=x; break; } }
+  else { for(let i=times.length-1;i>=0;i--) if(times[i]<now-1){ t=times[i]; break; } }
+  if(t==null) return;
+  userScrolled=false;
+  setNow(t,false,{force:true});
+}
 function flash(el,msg){
   const old=el.textContent; el.textContent=msg;
   setTimeout(()=>el.textContent=old,1400);
@@ -947,8 +958,8 @@ function bindUI(){
     const b=e.target.closest('button'); if(!b) return;
     speed=+b.dataset.s; $$('#speed button').forEach(x=>x.classList.toggle('on',x===b));
   });
-  $('#stepBack').onclick=()=>setNow(now-6*HOUR);
-  $('#stepFwd').onclick=()=>setNow(now+6*HOUR);
+  $('#stepBack').onclick=()=>stepItem(-1);
+  $('#stepFwd').onclick=()=>stepItem(1);
   $('#toNow').onclick=()=>jumpToNow({announce:true});
 
   /* tooltip dismiss */
@@ -965,8 +976,8 @@ function bindUI(){
     if(cardIsOpen() || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if(e.target.closest && e.target.closest('#list .card') && (e.key==='Enter'||e.code==='Space')) return;
     if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
-    else if(e.key==='ArrowRight') setNow(now+(e.shiftKey?DAY:6*HOUR));
-    else if(e.key==='ArrowLeft') setNow(now-(e.shiftKey?DAY:6*HOUR));
+    else if(e.key==='ArrowRight'){ if(e.shiftKey) setNow(now+DAY); else stepItem(1); }
+    else if(e.key==='ArrowLeft'){ if(e.shiftKey) setNow(now-DAY); else stepItem(-1); }
     else if(e.key==='1') setView('map');
     else if(e.key==='2') setView('journey');
     else if(e.key==='3') setView('calendar');
@@ -983,9 +994,9 @@ function bindUI(){
     },120);
   });
 
-  /* the time/location readout sits in the header on wide screens, next to the scrubber on narrow ones */
+  /* the time/location readout sits in the header on wide screens, and at the top of the sticky footer on narrow ones */
   const narrow=matchMedia('(max-width:940px)'), readout=$('.readout');
-  const placeReadout=()=>(narrow.matches? $('.transport') : $('.topbar')).appendChild(readout);
+  const placeReadout=()=>narrow.matches? $('.transport').prepend(readout) : $('.topbar').appendChild(readout);
   narrow.addEventListener('change',placeReadout);
   placeReadout();
 
