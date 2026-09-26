@@ -599,6 +599,12 @@ function jumpToNow(opts){
   setNow(clamp(t,M.T0,M.T1), false, {live:true, force:true});
   if(opts&&opts.announce && (t<M.T0||t>M.T1)) flash($('#toNow'), t<M.T0?'not yet':'trip over');
 }
+/* opening an item that is under way right now keeps "now" live rather than jumping to t */
+function setNowForItem(id,t){
+  const it=M.ITEMS.find(x=>x.id===id), r=it&&it.ref, n=Date.now();
+  if(r && r.t1>r.t0 && n>=r.t0 && n<r.t1) setNow(n,false,{live:true});
+  else setNow(t);
+}
 /* while "now" is live, follow the wall clock — refreshed on each minute boundary */
 let liveTimer=null, liveDay=null;
 function refreshLive(){
@@ -849,7 +855,7 @@ function bindUI(){
   $('#gRoutesHit').addEventListener('click',e=>{
     const p=e.target.closest('[data-leg]'); if(!p||didPan) return;
     const l=M.LEGS.find(l=>l.id===p.dataset.leg); if(!l) return;
-    setNow(l.t0+(l.t1-l.t0)*0.4); focusItem(l.id);
+    setNowForItem(l.id, l.t0+(l.t1-l.t0)*0.4); focusItem(l.id);
   });
   $('#gSub').addEventListener('pointerover',e=>{
     const g=e.target.closest('[data-sub]'); if(!g) return;
@@ -859,7 +865,8 @@ function bindUI(){
   $('#gSub').addEventListener('pointerout',hideTip);
   $('#gSub').addEventListener('click',e=>{
     const g=e.target.closest('[data-sub]'); if(!g||didPan) return;
-    const p=SUB[+g.dataset.sub]; setNow(p.ref.t0); focusItem(p.ref.id+(p.t==='stay'?'i':''));
+    const p=SUB[+g.dataset.sub], id=p.ref.id+(p.t==='stay'?'i':'');
+    setNowForItem(id, p.ref.t0); focusItem(id);
   });
 
   /* journey chart */
@@ -885,9 +892,9 @@ function bindUI(){
   jSvg.addEventListener('click',e=>{
     const el=e.target.closest('[data-leg],[data-stay],[data-ev]');
     if(el){
-      if(el.dataset.leg){ const l=M.LEGS.find(l=>l.id===el.dataset.leg); if(l){ setNow(l.t0+(l.t1-l.t0)*.4); focusItem(l.id); } return; }
-      if(el.dataset.stay){ const s=M.STAYS.find(s=>s.id===el.dataset.stay); if(s){ setNow(s.t0); focusItem(s.id+'i'); } return; }
-      const ev=M.EVENTS.find(x=>x.id===el.dataset.ev); if(ev){ setNow(ev.t0); focusItem(ev.id); } return;
+      if(el.dataset.leg){ const l=M.LEGS.find(l=>l.id===el.dataset.leg); if(l){ setNowForItem(l.id, l.t0+(l.t1-l.t0)*.4); focusItem(l.id); } return; }
+      if(el.dataset.stay){ const s=M.STAYS.find(s=>s.id===el.dataset.stay); if(s){ setNowForItem(s.id+'i', s.t0); focusItem(s.id+'i'); } return; }
+      const ev=M.EVENTS.find(x=>x.id===el.dataset.ev); if(ev){ setNowForItem(ev.id, ev.t0); focusItem(ev.id); } return;
     }
     // click anywhere on the plot to scrub
     if(!jGeom) return;
@@ -928,7 +935,7 @@ function bindUI(){
 
   /* itinerary list */
   const openFromList=c=>{
-    setNow(+c.dataset.t);
+    setNowForItem(c.dataset.id, +c.dataset.t);
     if(view.k>1.05) centerOnTraveler();
     openCard(c.dataset.id);
   };
