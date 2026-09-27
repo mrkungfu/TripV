@@ -267,6 +267,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .ro-time span{display:block;font-size:10.5px;color:var(--txt-faint);letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis}
 .ro-loc{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);
   border-radius:11px;padding:6px 12px;width:300px;flex:none;min-width:0}
+.ro-loc.has-item{cursor:pointer;transition:border-color .15s,background .15s}
+.ro-loc.has-item:hover,.ro-loc.has-item:focus-visible{background:rgba(255,255,255,.08);border-color:#3a4b78;outline:none}
 .ro-loc .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none}
 .ro-loc .ic svg{width:14px;height:14px}
 .ro-loc .txt{flex:1;min-width:0}
@@ -645,7 +647,7 @@ body.sheet-open{overflow:hidden}
         <b id="roTime">—</b>
         <span id="roDate">—</span>
       </div>
-      <div class="ro-loc">
+      <div class="ro-loc" id="roLoc">
         <div class="ic" id="roIcon"></div>
         <div class="txt">
           <b id="roPlace">—</b>

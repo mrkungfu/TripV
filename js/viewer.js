@@ -632,7 +632,9 @@ function render(listForce){
   $('#roTime').textContent=fmt(now,off,'t')+'  '+tzLabel(off);
   $('#roDate').textContent=fmt(now,off,'D')+'  ·  day '+M.dayNo(now)+' of '+M.TOTAL_DAYS;
   const ic=$('#roIcon');
+  let roItem=null;
   if(L.moving){
+    roItem=L.leg.id;
     const l=L.leg;
     ic.style.background=MODE_COLOR[l.mode]+'22';
     ic.innerHTML='<svg viewBox="0 0 24 24" fill="'+MODE_COLOR[l.mode]+'"><path d="'+modeIcon(l.mode)+'"/></svg>';
@@ -643,13 +645,27 @@ function render(listForce){
     ic.style.background=L.P.c+'22';
     ic.innerHTML='<svg viewBox="0 0 24 24" fill="'+L.P.c+'"><path d="'+ICON.bed+'"/></svg>';
     const st=M.STAYS.find(s=>now>=s.t0&&now<=s.t1&&s.place===L.place);
+    if(st) roItem=st.id+'i';
     $('#roPlace').textContent=L.P.n;
     $('#roStatus').textContent= st? st.name : (L.seg? 'in town · '+dur(L.seg.t1-now)+' until the next move' : L.P.r||'');
   }
+  setRoItem(roItem && M.ITEMS.some(x=>x.id===roItem) ? roItem : null);
   const pct=((now-M.T0)/M.TRIP_MS*100).toFixed(2);
   scrub.style.setProperty('--track','linear-gradient(90deg,#f7b955 0%,#fb7185 '+pct+'%,#1c2743 '+pct+'%)');
   $('#toNow').classList.toggle('on', liveNow);
   if(follow) centerOnTraveler();
+}
+function setRoItem(id){
+  const el=$('#roLoc');
+  if(el.dataset.id===(id||'')) return;
+  el.dataset.id=id||'';
+  el.classList.toggle('has-item',!!id);
+  if(id){
+    el.setAttribute('role','button'); el.tabIndex=0;
+    el.title='Open details';
+  } else {
+    el.removeAttribute('role'); el.removeAttribute('tabindex'); el.removeAttribute('title');
+  }
 }
 function togglePlay(){
   playing=!playing;
@@ -968,6 +984,11 @@ function bindUI(){
   $('#stepBack').onclick=()=>stepItem(-1);
   $('#stepFwd').onclick=()=>stepItem(1);
   $('#toNow').onclick=()=>jumpToNow({announce:true});
+  const roLoc=$('#roLoc');
+  roLoc.addEventListener('click',()=>{ if(roLoc.dataset.id) openCard(roLoc.dataset.id); });
+  roLoc.addEventListener('keydown',e=>{
+    if(roLoc.dataset.id && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); openCard(roLoc.dataset.id); }
+  });
 
   /* tooltip dismiss */
   addEventListener('pointerdown',e=>{ if(!e.target.closest('svg')) hideTip(); });
@@ -981,7 +1002,7 @@ function bindUI(){
   /* keyboard */
   addEventListener('keydown',e=>{
     if(cardIsOpen() || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-    if(e.target.closest && e.target.closest('#list .card') && (e.key==='Enter'||e.code==='Space')) return;
+    if(e.target.closest && e.target.closest('#list .card, #roLoc.has-item') && (e.key==='Enter'||e.code==='Space')) return;
     if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
     else if(e.key==='ArrowRight'){ if(e.shiftKey) setNow(now+DAY); else stepItem(1); }
     else if(e.key==='ArrowLeft'){ if(e.shiftKey) setNow(now-DAY); else stepItem(-1); }
