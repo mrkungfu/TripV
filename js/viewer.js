@@ -632,7 +632,7 @@ function render(listForce){
   $('#roTime').textContent=fmt(now,off,'t')+'  '+tzLabel(off);
   $('#roDate').textContent=fmt(now,off,'D')+'  ·  day '+M.dayNo(now)+' of '+M.TOTAL_DAYS;
   const ic=$('#roIcon');
-  let roItem=null;
+  let roItem=null, roTitle=null;
   if(L.moving){
     roItem=L.leg.id;
     const l=L.leg;
@@ -646,23 +646,28 @@ function render(listForce){
     ic.innerHTML='<svg viewBox="0 0 24 24" fill="'+L.P.c+'"><path d="'+ICON.bed+'"/></svg>';
     const st=M.STAYS.find(s=>now>=s.t0&&now<=s.t1&&s.place===L.place);
     if(st) roItem=st.id+'i';
+    else {
+      // nothing under way: link the next item later on the same local day instead
+      const dayEnd=Math.floor((now+off*MIN)/DAY)*DAY+DAY-off*MIN;
+      const next=M.ITEMS.find(x=>x.t0>now && x.t0<dayEnd);
+      if(next){ roItem=next.id; roTitle='Next up: '+next.title; }
+    }
     $('#roPlace').textContent=L.P.n;
     $('#roStatus').textContent= st? st.name : (L.seg? 'in town · '+dur(L.seg.t1-now)+' until the next move' : L.P.r||'');
   }
-  setRoItem(roItem && M.ITEMS.some(x=>x.id===roItem) ? roItem : null);
+  setRoItem(roItem && M.ITEMS.some(x=>x.id===roItem) ? roItem : null, roTitle);
   const pct=((now-M.T0)/M.TRIP_MS*100).toFixed(2);
   scrub.style.setProperty('--track','linear-gradient(90deg,#f7b955 0%,#fb7185 '+pct+'%,#1c2743 '+pct+'%)');
   $('#toNow').classList.toggle('on', liveNow);
   if(follow) centerOnTraveler();
 }
-function setRoItem(id){
+function setRoItem(id,title){
   const el=$('#roLoc');
-  if(el.dataset.id===(id||'')) return;
   el.dataset.id=id||'';
   el.classList.toggle('has-item',!!id);
   if(id){
     el.setAttribute('role','button'); el.tabIndex=0;
-    el.title='Open details';
+    el.title=title||'Open details';
   } else {
     el.removeAttribute('role'); el.removeAttribute('tabindex'); el.removeAttribute('title');
   }
