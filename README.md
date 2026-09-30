@@ -66,9 +66,9 @@ normalize it to JSON.
 
 ## Views and small screens
 
-The tabs switch between **Map**, **Journey**, **Calendar** and **List** (keys 1–4); the
-choice is remembered. On wide screens the itinerary also sits beside the map, journey and
-calendar views, and List widens it into the main area. Each filter chip shows how many
+The tabs switch between **Map**, **Journey** and **Calendar** (keys 1–3), plus **List**
+(key 4) on narrow screens; the choice is remembered. On wide screens the itinerary always
+sits beside the current view. Each filter chip shows how many
 bookings it covers within the current search (a stay counts once, not once for check-in and again for check-out).
 
 On narrow screens (≤ 940 px) the selected view fills the space between the header and the

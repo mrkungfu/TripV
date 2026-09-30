@@ -205,10 +205,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .filters button.on .fc{color:#56627e}
 .filters button.none{opacity:.5}
 .liststats{display:none;font-size:11px;color:var(--txt-faint);letter-spacing:.03em;padding:0 2px}
-
-/* list view: the itinerary takes over the stage */
-.app.list-view .stage{display:none}
-.app.list-view .main{grid-template-columns:minmax(0,880px);justify-content:center}
+.tabs button[data-view="list"]{display:none}
 .list{overflow:auto;padding:6px 10px 26px;flex:1;scroll-behavior:smooth}
 .daygroup{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,var(--panel) 72%,rgba(17,26,46,0));
   padding:11px 2px 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint);
@@ -494,12 +491,14 @@ body.sheet-open{overflow:hidden}
 @media (max-width:940px){
   .main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);padding:0 10px 10px}
   .app:not(.list-view) .side{display:none}
+  .app.list-view .stage{display:none}
+  .tabs button[data-view="list"]{display:flex}
   .legend{font-size:10px;gap:8px;padding:6px 8px}
   .legend span:last-child{display:none}
   .topbar{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand stats";padding:10px 10px 8px}
   .brand h1{font-size:15px}
   .stats .stat:not(.stat-days){display:none}
-  .stat{min-width:0;padding:4px 10px;text-align:right}
+  .stat{min-width:0;padding:4px 10px}
   .liststats{display:block}
   .transport{grid-template-columns:1fr;gap:8px;position:sticky;bottom:0;z-index:30;padding:8px 10px calc(10px + env(safe-area-inset-bottom));
     background:rgba(10,16,32,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line-soft)}

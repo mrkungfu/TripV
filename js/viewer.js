@@ -16,6 +16,7 @@ let currentView='map', mapZoom='fit', liveNow=false;
 let filter='all', query='', CARDS=[], lastActive=-2, userScrolled=false, programScroll=false, scrollTimer=null, scrollRaf=null;
 let jOrder='seq', jGeom=null;
 const UI_PREFS_KEY='tripviz.ui';
+const narrow=matchMedia('(max-width:940px)');
 let fullPath={}, doneEls={}, nodeEls={}, nodeLbl={}, nodeSub={}, SUB=[];
 
 const mapSvg=$('#mapSvg'), mapRoot=$('#mapRoot'), jSvg=$('#journeySvg'), scrub=$('#scrub'), tip=$('#tip');
@@ -1030,7 +1031,7 @@ function bindUI(){
     else if(e.key==='1') setView('map');
     else if(e.key==='2') setView('journey');
     else if(e.key==='3') setView('calendar');
-    else if(e.key==='4') setView('list');
+    else if(e.key==='4' && narrow.matches) setView('list');
   });
 
   /* resize */
@@ -1045,11 +1046,13 @@ function bindUI(){
   });
 
   /* the view tabs and time/location readout sit in the header on wide screens, and at the top of the sticky footer on narrow ones */
-  const narrow=matchMedia('(max-width:940px)'), tabs=$('#tabs'), readout=$('.readout');
+  const tabs=$('#tabs'), readout=$('.readout');
   const placeControls=()=>{
     if(narrow.matches){ $('.transport').prepend(readout); $('.transport').prepend(tabs); }
     else { $('.topbar').appendChild(tabs); $('.topbar').appendChild(readout); }
-    if(M) syncList(now,true);
+    if(!M) return;
+    if(currentView==='list' && !narrow.matches) setView('map', true);
+    else syncList(now,true);
   };
   narrow.addEventListener('change',placeControls);
   placeControls();
@@ -1079,6 +1082,8 @@ function bindUI(){
 }
 
 function setView(v, silent){
+  // List is narrow-only: wide screens always show the itinerary beside the other views
+  if(v==='list' && !narrow.matches){ v='map'; silent=true; }
   currentView=v;
   $$('#tabs button').forEach(x=>x.classList.toggle('on',x.dataset.view===v));
   $$('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
