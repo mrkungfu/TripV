@@ -64,6 +64,19 @@ The editor also accepts a relaxed JS object literal (unquoted keys, trailing com
 so data lifted out of an old `<script>` block pastes straight in — hit **Format** to
 normalize it to JSON.
 
+## Views and small screens
+
+The tabs switch between **Map**, **Journey** and **Calendar** (keys 1–3), plus **List**
+(key 4) on narrow screens; the choice is remembered. On wide screens the itinerary always
+sits beside the current view. Each filter chip shows how many
+bookings it covers within the current search (a stay counts once, not once for check-in and again for check-out).
+
+On narrow screens (≤ 940 px) the selected view fills the space between the header and the
+footer. The header keeps only the day count next to the trip name, the tabs move into the
+footer above the time and current-item readout, and the itinerary appears only in List
+view, where the filter counts and a places / countries / distance line stand in for the
+header stats.
+
 ## Item cards
 
 Clicking anything in the itinerary list (or a route, pin or journey-chart mark) opens a

@@ -16,6 +16,7 @@ let currentView='map', mapZoom='fit', liveNow=false;
 let filter='all', query='', CARDS=[], lastActive=-2, userScrolled=false, programScroll=false, scrollTimer=null, scrollRaf=null;
 let jOrder='seq', jGeom=null;
 const UI_PREFS_KEY='tripviz.ui';
+const narrow=matchMedia('(max-width:940px)');
 let fullPath={}, doneEls={}, nodeEls={}, nodeLbl={}, nodeSub={}, SUB=[];
 
 const mapSvg=$('#mapSvg'), mapRoot=$('#mapRoot'), jSvg=$('#journeySvg'), scrub=$('#scrub'), tip=$('#tip');
@@ -181,7 +182,7 @@ function svgPoint(cx,cy){
 function readUiPrefs(){
   try{
     const p=JSON.parse(localStorage.getItem(UI_PREFS_KEY)||'{}');
-    if(p.view==='map'||p.view==='journey'||p.view==='calendar') currentView=p.view;
+    if(p.view==='map'||p.view==='journey'||p.view==='calendar'||p.view==='list') currentView=p.view;
     if(p.mapZoom==='fit'||p.mapZoom==='focus'||p.mapZoom==='follow') mapZoom=p.mapZoom;
   }catch(e){}
 }
@@ -474,9 +475,10 @@ function buildChapters(){
 /* ============================================================
    5.  Itinerary list
    ============================================================ */
-function passes(it){
-  if(filter==='warn' && !it.warn) return false;
-  if(filter!=='all' && filter!=='warn' && it.cls!==filter) return false;
+function passes(it,f){
+  if(f===undefined) f=filter;
+  if(f==='warn' && !it.warn) return false;
+  if(f!=='all' && f!=='warn' && it.cls!==f) return false;
   if(query){
     const hay=(it.title+' '+it.sub+' '+(it.det||'')+' '+(it.ref.conf||'')+' '+M.PLACES[it.place].n).toLowerCase();
     if(!hay.includes(query)) return false;
@@ -509,6 +511,7 @@ function renderList(){
     '</div>';
   });
   listEl.innerHTML = n? html : '<div class="emptylist">Nothing matches that.</div>';
+  renderFilterCounts();
   CARDS=$$('#list .card').map(el=>{
     const id=el.dataset.id;
     const it=M.ITEMS.find(x=>x.id===id);
@@ -517,6 +520,16 @@ function renderList(){
   lastActive=-2;
   syncList(now,true);
 }
+/* bookings per filter within the current search — a stay counts once, not once for check-in and again for check-out */
+function renderFilterCounts(){
+  $$('#filters button').forEach(b=>{
+    const refs=new Set();
+    M.ITEMS.forEach(it=>{ if(passes(it,b.dataset.f)) refs.add(it.ref); });
+    $('.fc',b).textContent=refs.size;
+    b.classList.toggle('none',!refs.size);
+  });
+}
+function listVisible(){ return $('#list').clientHeight>0; }
 function calDayStart(ts){
   const shift=M.calOff*MIN;
   return Math.floor((ts+shift)/DAY)*DAY-shift;
@@ -566,6 +579,7 @@ function syncList(ts,force){
   const active=idx>=0?CARDS[idx].el:null;
   if(!active) return;
   active.classList.add('is-active');
+  if(!listVisible()) return;
   if(force){
     userScrolled=false;
     scrollCardIntoView(active);
@@ -733,7 +747,10 @@ function buildHeader(){
     [(km>=1500? Math.round(km/1000)+'k' : Math.round(km)),'km'],[flights,'flights'],[ground,'ground'],
     [M.STAYS.length,'stays']
   ];
-  $('#stats').innerHTML=rows.map(r=>'<div class="stat"><b>'+r[0]+'</b><span>'+r[1]+'</span></div>').join('');
+  $('#stats').innerHTML=rows.map(r=>'<div class="stat'+(r[1]==='days'?' stat-days':'')+'"><b>'+r[0]+'</b><span>'+r[1]+'</span></div>').join('');
+  const places=M.placeKeys.length;
+  $('#listStats').textContent=places+' place'+(places===1?'':'s')+' in '+countries+' countr'+(countries===1?'y':'ies')+
+    ' · '+rows[3][0]+' km travelled';
   $('#tripSel').title=M.title+' — switch between trips saved in this browser';
   $('#brandSub').textContent=fmt(M.T0,M.originOff,'D')+'  →  '+fmt(M.T1,M.originOff,'D');
   document.title=M.title+' · Trip visualizer';
@@ -1014,6 +1031,7 @@ function bindUI(){
     else if(e.key==='1') setView('map');
     else if(e.key==='2') setView('journey');
     else if(e.key==='3') setView('calendar');
+    else if(e.key==='4' && narrow.matches) setView('list');
   });
 
   /* resize */
@@ -1027,11 +1045,17 @@ function bindUI(){
     },120);
   });
 
-  /* the time/location readout sits in the header on wide screens, and at the top of the sticky footer on narrow ones */
-  const narrow=matchMedia('(max-width:940px)'), readout=$('.readout');
-  const placeReadout=()=>narrow.matches? $('.transport').prepend(readout) : $('.topbar').appendChild(readout);
-  narrow.addEventListener('change',placeReadout);
-  placeReadout();
+  /* the view tabs and time/location readout sit in the header on wide screens, and at the top of the sticky footer on narrow ones */
+  const tabs=$('#tabs'), readout=$('.readout');
+  const placeControls=()=>{
+    if(narrow.matches){ $('.transport').prepend(readout); $('.transport').prepend(tabs); }
+    else { $('.topbar').appendChild(tabs); $('.topbar').appendChild(readout); }
+    if(!M) return;
+    if(currentView==='list' && !narrow.matches) setView('map', true);
+    else syncList(now,true);
+  };
+  narrow.addEventListener('change',placeControls);
+  placeControls();
 
   /* trip selector + drag-and-drop loading */
   $('#tripSel').addEventListener('change',e=>loadByName(e.target.value));
@@ -1058,11 +1082,16 @@ function bindUI(){
 }
 
 function setView(v, silent){
+  // List is narrow-only: wide screens always show the itinerary beside the other views
+  if(v==='list' && !narrow.matches){ v='map'; silent=true; }
   currentView=v;
   $$('#tabs button').forEach(x=>x.classList.toggle('on',x.dataset.view===v));
   $$('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
+  const wasList=$('.app').classList.contains('list-view');
+  $('.app').classList.toggle('list-view',v==='list');
   if(v==='journey') drawJourney();
-  if(v==='map'&&mapNeedsFit) applySavedMapZoom();
+  if(v==='map'){ if(mapNeedsFit) applySavedMapZoom(); else applyView(); }
+  if((v==='list'||wasList) && M) syncList(now,true);
   if(!silent) saveUiPrefs();
 }
 
