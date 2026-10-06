@@ -4,7 +4,7 @@
    Clicking an itinerary item (or its route / pin) opens a card laid
    out for that kind of item: tap-to-copy fields, a directions / call
    action bottom-left, and an in-place editor bottom-right that saves
-   back to the trip library. Relies on viewer.js globals (M, curCfg,
+   back to the trip library (and can delete the item). Relies on viewer.js globals (M, curCfg,
    curName, loadTrip, populateTripSel) at call time.
    ============================================================ */
 
@@ -23,7 +23,8 @@ const LINE_ICON={
   edit:'M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z',
   close:'M6 6l12 12M18 6 6 18',
   warn:'M12 3 2 20h20L12 3zM12 10v4M12 17.5v.01',
-  map:'M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3zM9 3v15M15 6v15'
+  map:'M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3zM9 3v15M15 6v15',
+  trash:'M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3'
 };
 const ico=(d,cls)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"'+
   (cls?' class="'+cls+'"':'')+'><path d="'+d+'"/></svg>';
@@ -328,7 +329,8 @@ function renderEditor(err){
       (err?'<div class="sc-err">'+esc(err)+'</div>':'')+fields+
       '<p class="sc-formnote">Places, mode and ordering are edited in the <a href="editor.html">full trip editor</a>.</p>'+
     '</form></div>'+
-    '<footer class="sc-foot"><button type="button" class="sc-btn" data-cancel>Cancel</button><span class="sp"></span>'+
+    '<footer class="sc-foot"><button type="button" class="sc-btn" data-cancel>Cancel</button>'+
+      '<button type="button" class="sc-btn danger" data-delete title="Delete this item">'+ico(LINE_ICON.trash)+'Delete</button><span class="sp"></span>'+
       '<button type="button" class="sc-btn primary" data-save>'+ico(LINE_ICON.check)+'Save</button></footer>';
   sheetCard.classList.add('editing');
   const first=$('#scForm [data-f]'); if(first && !err) first.focus();
@@ -361,24 +363,51 @@ function saveEdit(){
   if(!err){ try{ buildModel(cfg); }catch(e){ err=e.message; } }
   if(err){ captureAndRerender(err); return; }
 
-  let name=curName;
-  if(!TripStore.get(name)){
-    const suggested=(cfg.title||'My trip')+(curName==='__demo'?' (my copy)':'');
-    const ans=prompt('This trip is not saved in this browser yet, so your edit will be saved as a new trip. Name it:', suggested);
-    if(ans==null) return;
-    name=ans.trim();
-    if(!name){ captureAndRerender('Give the trip a name to save your edit.'); return; }
-    if(TripStore.get(name) && !confirm('Replace the saved trip "'+name+'" with this one?')) return;
-  }
+  const name=saveTarget(cfg,'edit');
+  if(name==null) return;
+  if(!name){ captureAndRerender('Give the trip a name to save your edit.'); return; }
+  const id=it.id;
+  storeTrip(cfg,name);
+  openCard(id);
+  toast('Saved to “'+name+'”');
+}
+/* entries are only flagged, never spliced out, so srcIndex/ids stay put and undo can clear the flag */
+function deleteItem(){
+  const it=cardItem, kind=itemKind(it);
+  const label=kind==='stay'? it.ref.name : it.ref.title;
+  const what=kind==='stay'? 'the stay "'+label+'" (check-in and check-out)' : '"'+label+'"';
+  if(!confirm('Delete '+what+' from this trip?')) return;
+  const cfg=JSON.parse(JSON.stringify(curCfg));
+  const raw=rawEntry(cfg,it);
+  raw.deleted=true;
+  raw.deletedAt=new Date().toISOString();
+  try{ buildModel(cfg); }
+  catch(e){ captureAndRerender('Can’t delete this item: '+e.message); return; }
+
+  const name=saveTarget(cfg,'deletion');
+  if(name==null) return;
+  if(!name){ captureAndRerender('Give the trip a name to save the deletion.'); return; }
+  storeTrip(cfg,name);
+  toast('Deleted “'+label+'”');
+}
+/* where a change gets saved: the current trip if it is in the library, else a new name
+   from the user. Returns null when they back out, '' when they leave the name blank. */
+function saveTarget(cfg,what){
+  if(TripStore.get(curName)) return curName;
+  const suggested=(cfg.title||'My trip')+(curName==='__demo'?' (my copy)':'');
+  const ans=prompt('This trip is not saved in this browser yet, so your '+what+' will be saved as a new trip. Name it:', suggested);
+  if(ans==null) return null;
+  const name=ans.trim();
+  if(name && TripStore.get(name) && !confirm('Replace the saved trip "'+name+'" with this one?')) return null;
+  return name;
+}
+function storeTrip(cfg,name){
   TripStore.save(name,cfg);
   TripStore.setActive(name);
   curName=name;
   populateTripSel(name);
-  const id=it.id;
-  loadTrip(cfg,{keep:true});
   sheetCard.classList.remove('editing');
-  openCard(id);
-  toast('Saved to “'+name+'”');
+  loadTrip(cfg,{keep:true});
 }
 /* re-render the form with an error while keeping what the user typed */
 function captureAndRerender(err){
@@ -422,6 +451,7 @@ sheet.addEventListener('click',e=>{
   if(e.target.closest('[data-edit]')){ startEdit(); return; }
   if(e.target.closest('[data-cancel]')){ cancelEdit(); return; }
   if(e.target.closest('[data-save]')){ saveEdit(); return; }
+  if(e.target.closest('[data-delete]')){ deleteItem(); return; }
 });
 sheet.addEventListener('submit',e=>{ e.preventDefault(); saveEdit(); });
 addEventListener('keydown',e=>{
