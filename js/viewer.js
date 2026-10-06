@@ -989,6 +989,7 @@ function bindUI(){
     filter=b.dataset.f; $$('#filters button').forEach(x=>x.classList.toggle('on',x===b)); renderList();
   });
   $('#q').addEventListener('input',e=>{ query=e.target.value.trim().toLowerCase(); renderList(); });
+  $('#addItem').addEventListener('click',()=>{ stopPlay(); openNewItem($('#q').value.trim()); });
   $('#list').addEventListener('scroll',()=>{
     if(programScroll) return;
     userScrolled=true; clearTimeout(scrollTimer);
