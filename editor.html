@@ -257,6 +257,7 @@ PHX to DTW / Departs: Jul 29, 2026 11:30am / Check-in: Jul 30, 2026 3:00pm)"></t
           <ul>
             <li><code>focus</code>: array of place keys the map's <b>Focus</b> button fits. Default: every place outside the origin's country.</li>
             <li><code>calendarOffset</code>: UTC offset in minutes that defines where a "day" starts/ends in the calendar and scrubber ticks. Default: the offset where you spend the most time.</li>
+            <li><code>deleted</code> (on any leg, stay or event): <code>true</code> hides the entry everywhere while keeping it in the config. The viewer's <b>Delete</b> button sets it, along with a <code>deletedAt</code> timestamp. Remove the flag to bring the item back.</li>
           </ul>
 
           <h2>Minimal example</h2>

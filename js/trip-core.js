@@ -103,9 +103,10 @@ const PLACE_PALETTE=['#fb923c','#60a5fa','#34d399','#f472b6','#c084fc','#fcd34d'
    {
      title: "…",
      places: { key: {n, r, cc, lat, lon, off, c?, lbl?} },
-     legs:   [ {id?, mode, from, to, dep, arr, title?, op?, conf?, seat?, phone?, depAddr?, arrAddr?, warn?, det?} ],
-     stays:  [ {id?, place, name, addr?, phone?, conf?, lat?, lon?, in, out, warn?, det?} ],
-     events: [ {id?, kind?, place, title, start, end?, lat?, lon?, addr?, phone?, conf?, det?, warn?, off?} ],
+     legs:   [ {id?, mode, from, to, dep, arr, title?, op?, conf?, seat?, phone?, depAddr?, arrAddr?, warn?, det?, deleted?} ],
+     stays:  [ {id?, place, name, addr?, phone?, conf?, lat?, lon?, in, out, warn?, det?, deleted?} ],
+     events: [ {id?, kind?, place, title, start, end?, lat?, lon?, addr?, phone?, conf?, det?, warn?, off?, deleted?} ],
+     (any leg/stay/event may also carry deleted:true + deletedAt — hidden, kept for undo)
      focus:  [placeKeys]?          // what the FOCUS map button fits
      calendarOffset: minutes?      // which clock defines "a day" in the calendar
    }
@@ -131,11 +132,14 @@ function buildModel(raw){
     if(!P.c) P.c=PLACE_PALETTE[i%PLACE_PALETTE.length];
   });
 
-  /* srcIndex points back into the config arrays so the viewer can edit the raw entry */
-  const LEGS=(Array.isArray(cfg.legs)?cfg.legs:[]).map((l,i)=>Object.assign({},l,{srcIndex:i}));
-  if(!LEGS.length) throw new Error('The config needs at least one entry in "legs".');
-  LEGS.forEach((l,i)=>{
-    if(!l.id) l.id='L'+(i+1);
+  /* srcIndex points back into the config arrays so the viewer can edit the raw entry.
+     Entries flagged `deleted` stay in the config (so a delete can be undone) but are
+     left out of the model; default ids use srcIndex so they don't shift around them. */
+  const live=arr=>(Array.isArray(arr)?arr:[]).map((x,i)=>Object.assign({},x,{srcIndex:i})).filter(x=>!x.deleted);
+  const LEGS=live(cfg.legs);
+  if(!LEGS.length) throw new Error('The config needs at least one '+((cfg.legs||[]).length?'non-deleted ':'')+'entry in "legs".');
+  LEGS.forEach(l=>{
+    if(!l.id) l.id='L'+(l.srcIndex+1);
     if(!l.mode) l.mode='flight';
     if(!LEG_MODES.includes(l.mode)) throw new Error('Leg '+l.id+': mode "'+l.mode+'" is not one of '+LEG_MODES.join(', ')+'.');
     if(!PLACES[l.from]) throw new Error('Leg '+l.id+': "from" refers to unknown place "'+l.from+'".');
@@ -150,9 +154,9 @@ function buildModel(raw){
   });
   LEGS.sort((a,b)=>a.t0-b.t0);
 
-  const STAYS=(Array.isArray(cfg.stays)?cfg.stays:[]).map((s,i)=>Object.assign({},s,{srcIndex:i}));
-  STAYS.forEach((s,i)=>{
-    if(!s.id) s.id='S'+(i+1);
+  const STAYS=live(cfg.stays);
+  STAYS.forEach(s=>{
+    if(!s.id) s.id='S'+(s.srcIndex+1);
     if(!PLACES[s.place]) throw new Error('Stay '+s.id+' ("'+(s.name||'?')+'"): unknown place "'+s.place+'".');
     s.P=PLACES[s.place];
     s.t0=T(s.in); s.t1=T(s.out);
@@ -166,9 +170,9 @@ function buildModel(raw){
   });
   STAYS.sort((a,b)=>a.t0-b.t0);
 
-  const EVENTS=(Array.isArray(cfg.events)?cfg.events:[]).map((e,i)=>Object.assign({},e,{srcIndex:i}));
-  EVENTS.forEach((e,i)=>{
-    if(!e.id) e.id='E'+(i+1);
+  const EVENTS=live(cfg.events);
+  EVENTS.forEach(e=>{
+    if(!e.id) e.id='E'+(e.srcIndex+1);
     if(!e.kind) e.kind='activity';
     if(!['activity','note','gapnote'].includes(e.kind)) throw new Error('Event '+e.id+': kind "'+e.kind+'" must be activity, note or gapnote.');
     if(!PLACES[e.place]) throw new Error('Event '+e.id+' ("'+(e.title||'?')+'"): unknown place "'+e.place+'".');

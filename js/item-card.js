@@ -4,9 +4,9 @@
    Clicking an itinerary item (or its route / pin) opens a card laid
    out for that kind of item: tap-to-copy fields, a directions / call
    action bottom-left, and an in-place editor bottom-right that saves
-   back to the trip library. The same sheet hosts the form for adding
-   a new item. Relies on viewer.js globals (M, curCfg, curName, now,
-   loadTrip, populateTripSel, setNowForItem, focusItem) at call time.
+   back to the trip library (and can delete the item). The same sheet hosts
+   the form for adding a new item. Relies on viewer.js globals (M, curCfg,
+   curName, now, loadTrip, populateTripSel, setNowForItem, focusItem) at call time.
    ============================================================ */
 
 let cardItem=null, cardEditing=false, cardReturnFocus=null, toastTimer=null, cardTimer=null, cardDrag=null, cardDragTimer=null;
@@ -24,7 +24,8 @@ const LINE_ICON={
   edit:'M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z',
   close:'M6 6l12 12M18 6 6 18',
   warn:'M12 3 2 20h20L12 3zM12 10v4M12 17.5v.01',
-  map:'M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3zM9 3v15M15 6v15'
+  map:'M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3zM9 3v15M15 6v15',
+  trash:'M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3'
 };
 const ico=(d,cls)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"'+
   (cls?' class="'+cls+'"':'')+'><path d="'+d+'"/></svg>';
@@ -331,7 +332,8 @@ function renderEditor(err){
       (err?'<div class="sc-err">'+esc(err)+'</div>':'')+fields+
       '<p class="sc-formnote">Places, mode and ordering are edited in the <a href="editor.html">full trip editor</a>.</p>'+
     '</form></div>'+
-    '<footer class="sc-foot"><button type="button" class="sc-btn" data-cancel>Cancel</button><span class="sp"></span>'+
+    '<footer class="sc-foot"><button type="button" class="sc-btn" data-cancel>Cancel</button>'+
+      '<button type="button" class="sc-btn danger" data-delete title="Delete this item">'+ico(LINE_ICON.trash)+'Delete</button><span class="sp"></span>'+
       '<button type="button" class="sc-btn primary" data-save>'+ico(LINE_ICON.check)+'Save</button></footer>';
   sheetCard.classList.add('editing');
   const first=$('#scForm [data-f]'); if(first && !err) first.focus();
@@ -371,6 +373,25 @@ function saveEdit(){
   sheetCard.classList.remove('editing');
   openCard(id);
   toast('Saved to “'+name+'”');
+}
+/* entries are only flagged, never spliced out, so srcIndex/ids stay put and undo can clear the flag */
+function deleteItem(){
+  const it=cardItem, kind=itemKind(it);
+  const label=kind==='stay'? it.ref.name : it.ref.title;
+  const what=kind==='stay'? 'the stay "'+label+'" (check-in and check-out)' : '"'+label+'"';
+  if(!confirm('Delete '+what+' from this trip?')) return;
+  const cfg=JSON.parse(JSON.stringify(curCfg));
+  const raw=rawEntry(cfg,it);
+  raw.deleted=true;
+  raw.deletedAt=new Date().toISOString();
+  try{ buildModel(cfg); }
+  catch(e){ captureAndRerender('Can’t delete this item: '+e.message); return; }
+
+  const name=persistTrip(cfg,'deletion',captureAndRerender);
+  if(!name) return;
+  sheetCard.classList.remove('editing');
+  loadTrip(cfg,{keep:true});
+  toast('Deleted “'+label+'”');
 }
 /* save cfg to the library under the current trip's name (asking for one if it isn't saved yet);
    returns the name, or null if the user backed out */
@@ -596,6 +617,7 @@ sheet.addEventListener('click',e=>{
   if(k && cardNew){ setNewKind(k.dataset.kind); return; }
   if(e.target.closest('[data-cancel]')){ if(cardNew) closeCard(); else cancelEdit(); return; }
   if(e.target.closest('[data-save]')){ if(cardNew) saveNew(); else saveEdit(); return; }
+  if(e.target.closest('[data-delete]') && !cardNew){ deleteItem(); return; }
 });
 sheet.addEventListener('change',e=>{
   const f=cardNew && e.target.dataset.f;

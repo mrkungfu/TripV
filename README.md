@@ -94,6 +94,13 @@ item's text fields and times in place and saves to the trip library. Editing the
 or a dropped file saves it as a new trip in your browser first. Places, modes and ordering
 are still edited in the full editor.
 
+The edit form also has **Delete**. Deleting a stay removes both its check-in and check-out.
+A deleted item is not removed from the config: its entry gets `"deleted": true` and a
+`"deletedAt"` timestamp and is then ignored everywhere (map, list, calendar, counts), so a
+future undo only has to clear the flag. Default ids (`L3`, `S2`, …) come from the
+entry's position in its array, so deleting one item never renumbers the others. A trip's
+last remaining leg can't be deleted.
+
 ## How map locations are determined
 
 Nothing is geocoded — the map only ever draws coordinates that are in the config:

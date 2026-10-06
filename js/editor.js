@@ -65,6 +65,8 @@ function runValidation(showOk){
       [Math.round(km).toLocaleString(),'km'],
       [fmt(model.T0,model.originOff,'d')+' → '+fmt(model.T1,model.originOff,'d'),'']
     ]});
+    const nDel=['legs','stays','events'].reduce((n,k)=>n+(Array.isArray(raw[k])?raw[k].filter(x=>x&&x.deleted).length:0),0);
+    if(nDel) blocks.push({cls:'info',html:esc2(nDel+' deleted item'+(nDel>1?'s are':' is')+' kept in the config (marked "deleted": true) and hidden from the trip.')});
   }
   if(warnings.length){
     blocks.push({h:'Warnings — worth a look'});
