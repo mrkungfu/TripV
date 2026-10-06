@@ -9,8 +9,8 @@
    loadTrip, populateTripSel, setNowForItem, focusItem) at call time.
    ============================================================ */
 
-let cardItem=null, cardEditing=false, cardReturnFocus=null, toastTimer=null, cardTimer=null;
-const sheet=$('#sheet'), sheetCard=$('#sheetCard');
+let cardItem=null, cardEditing=false, cardReturnFocus=null, toastTimer=null, cardTimer=null, cardDrag=null, cardDragTimer=null;
+const sheet=$('#sheet'), sheetCard=$('#sheetCard'), sheetBack=sheet.querySelector('.sheet-back');
 
 const LINE_ICON={
   pin:'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
@@ -267,6 +267,7 @@ function openCard(id){
   const wasOpen=cardIsOpen();
   cardItem=it; cardEditing=false; cardNew=null;
   sheetCard.classList.remove('editing');
+  clearTimeout(cardDragTimer); sheetCard.style.transform='';
   styleCard(it);
   renderCard();
   if(typeof hideTip==='function') hideTip();
@@ -601,6 +602,44 @@ sheet.addEventListener('change',e=>{
   if(f==='mode'||f==='place'||f==='from'||f==='to'){ captureNew(); renderNewForm(null,f); }
 });
 sheet.addEventListener('submit',e=>{ e.preventDefault(); if(cardNew) saveNew(); else saveEdit(); });
+
+/* touch: drag the header down to dismiss a card that is being viewed (not edited or created) */
+sheetCard.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse' || cardEditing || cardNew || cardDrag || !e.target.closest('.sc-head')) return;
+  cardDrag={id:e.pointerId, x:e.clientX, y:e.clientY, dy:0, v:0, lastY:e.clientY, lastT:e.timeStamp, on:false};
+});
+sheetCard.addEventListener('pointermove',e=>{
+  if(!cardDrag || e.pointerId!==cardDrag.id) return;
+  const dy=e.clientY-cardDrag.y, dx=e.clientX-cardDrag.x;
+  if(!cardDrag.on){
+    if(Math.abs(dx)>10 && Math.abs(dx)>dy){ cardDrag=null; return; }
+    if(dy<8) return;
+    cardDrag.on=true;
+    sheet.classList.add('dragging');
+    sheetCard.setPointerCapture(e.pointerId);
+  }
+  const dt=e.timeStamp-cardDrag.lastT;
+  if(dt>0) cardDrag.v=(e.clientY-cardDrag.lastY)/dt;
+  cardDrag.lastY=e.clientY; cardDrag.lastT=e.timeStamp;
+  cardDrag.dy=Math.max(0,dy);
+  sheetCard.style.transform='translateY('+cardDrag.dy+'px)';
+  sheetBack.style.opacity=String(1-Math.min(1,cardDrag.dy/sheetCard.offsetHeight));
+});
+function endDrag(e){
+  if(!cardDrag || e.pointerId!==cardDrag.id) return;
+  const d=cardDrag; cardDrag=null;
+  if(!d.on) return;
+  sheet.classList.remove('dragging');
+  sheetBack.style.opacity='';
+  const dismiss=e.type==='pointerup' && (d.dy>Math.min(140,sheetCard.offsetHeight*.3) || (d.v>.5 && d.dy>30));
+  if(!dismiss){ sheetCard.style.transform=''; return; }
+  sheetCard.style.transform='translateY(100%)';
+  closeCard();
+  clearTimeout(cardDragTimer);
+  cardDragTimer=setTimeout(()=>{ sheetCard.style.transform=''; },260);
+}
+sheetCard.addEventListener('pointerup',endDrag);
+sheetCard.addEventListener('pointercancel',endDrag);
 addEventListener('keydown',e=>{
   if(!cardIsOpen()) return;
   if(e.key==='Escape'){ e.preventDefault(); if(cardEditing) cancelEdit(); else closeCard(); }

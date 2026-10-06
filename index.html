@@ -484,6 +484,12 @@ body.sheet-open{overflow:hidden}
   .sc-form{grid-template-columns:1fr}
   .toast{bottom:calc(20px + env(safe-area-inset-bottom))}
 }
+.sc-head{touch-action:none}
+.sheet.dragging .sheet-card,.sheet.dragging .sheet-back{transition:none}
+/* iOS zooms the page into any focused field set below 16px */
+@media (hover:none) and (pointer:coarse){
+  .sc-form input,.sc-form textarea,.sc-form select,.search input{font-size:16px}
+}
 
 @media (max-width:1500px){
   .brand h1{font-size:15.5px}
