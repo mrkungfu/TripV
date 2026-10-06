@@ -189,7 +189,14 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 /* ---------- side panel ---------- */
 .side{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);display:flex;flex-direction:column;min-height:0;min-width:0;box-shadow:var(--shadow)}
 .sidehead{padding:11px 12px 9px;border-bottom:1px solid var(--line-soft);display:flex;flex-direction:column;gap:8px}
-.search{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);border-radius:9px;padding:6px 10px}
+.searchrow{display:flex;gap:7px}
+.addbtn{
+  flex:none;width:33px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  color:var(--txt-dim);background:rgba(255,255,255,.045);border:1px solid var(--line-soft)
+}
+.addbtn:hover,.addbtn:focus-visible{color:#fff;border-color:#3a4b78;background:rgba(255,255,255,.09);outline:none}
+.addbtn svg{width:16px;height:16px}
+.search{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);border-radius:9px;padding:6px 10px}
 .search input{flex:1;background:none;border:none;outline:none;color:var(--txt);font:inherit;font-size:13px}
 .search input::placeholder{color:var(--txt-faint)}
 .search svg{width:14px;height:14px;color:var(--txt-faint);flex:none}
@@ -444,9 +451,15 @@ body.sheet-open{overflow:hidden}
 .sc-form .fld{display:flex;flex-direction:column;gap:4px;min-width:0}
 .sc-form .fld.full{grid-column:1/-1}
 .sc-form .fld>span{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--txt-faint)}
-.sc-form input,.sc-form textarea{width:100%;background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:9px;padding:8px 10px;
+.sc-form input,.sc-form textarea,.sc-form select{width:100%;background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:9px;padding:8px 10px;
   color:var(--txt);font:inherit;font-size:13.5px;color-scheme:dark;resize:vertical}
-.sc-form input:focus,.sc-form textarea:focus{outline:none;border-color:var(--c);box-shadow:0 0 0 3px var(--c2)}
+.sc-form select option{background:var(--panel-2)}
+.sc-form input:focus,.sc-form textarea:focus,.sc-form select:focus{outline:none;border-color:var(--c);box-shadow:0 0 0 3px var(--c2)}
+.sc-kinds{grid-column:1/-1;display:flex;gap:3px;background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:11px;padding:3px}
+.sc-kinds button{flex:1 1 0;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 4px;border-radius:8px;font-size:12.5px;color:var(--txt-dim);min-width:0}
+.sc-kinds button svg{width:14px;height:14px;flex:none}
+.sc-kinds button:hover{color:var(--txt)}
+.sc-kinds button.on{background:var(--c2);color:#fff;box-shadow:inset 0 0 0 1px var(--c)}
 .sc-form .dtwrap{display:flex;align-items:center;gap:6px}
 .sc-form .dtwrap input{flex:1;min-width:0}
 .sc-form .tz{font-size:10.5px;color:var(--txt-faint);white-space:nowrap}
@@ -472,6 +485,12 @@ body.sheet-open{overflow:hidden}
   .sc-foot{padding-bottom:calc(12px + env(safe-area-inset-bottom))}
   .sc-form{grid-template-columns:1fr}
   .toast{bottom:calc(20px + env(safe-area-inset-bottom))}
+}
+.sc-head{touch-action:none}
+.sheet.dragging .sheet-card,.sheet.dragging .sheet-back{transition:none}
+/* iOS zooms the page into any focused field set below 16px */
+@media (hover:none) and (pointer:coarse){
+  .sc-form input,.sc-form textarea,.sc-form select,.search input{font-size:16px}
 }
 
 @media (max-width:1500px){
@@ -628,9 +647,14 @@ body.sheet-open{overflow:hidden}
     <!-- ITINERARY -->
     <aside class="side">
       <div class="sidehead">
-        <div class="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-          <input id="q" type="search" placeholder="Search stays, tours, cities…" autocomplete="off">
+        <div class="searchrow">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input id="q" type="search" placeholder="Search stays, tours, cities…" autocomplete="off">
+          </div>
+          <button type="button" class="addbtn" id="addItem" title="Add an item (uses the search text as its name)" aria-label="Add an item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
         </div>
         <div class="filters" id="filters">
           <button data-f="all" class="on">Everything<span class="fc"></span></button>
