@@ -4,8 +4,9 @@
    Clicking an itinerary item (or its route / pin) opens a card laid
    out for that kind of item: tap-to-copy fields, a directions / call
    action bottom-left, and an in-place editor bottom-right that saves
-   back to the trip library. Relies on viewer.js globals (M, curCfg,
-   curName, loadTrip, populateTripSel) at call time.
+   back to the trip library. The same sheet hosts the form for adding
+   a new item. Relies on viewer.js globals (M, curCfg, curName, now,
+   loadTrip, populateTripSel, setNowForItem, focusItem) at call time.
    ============================================================ */
 
 let cardItem=null, cardEditing=false, cardReturnFocus=null, toastTimer=null, cardTimer=null;
@@ -36,7 +37,7 @@ function itemKind(it){
   if(it.cls==='stay') return 'stay';
   return 'event';
 }
-function cardIsOpen(){ return !!cardItem; }
+function cardIsOpen(){ return !!(cardItem||cardNew); }
 
 /* ---------- small helpers ---------- */
 function offIso(off){
@@ -263,8 +264,8 @@ function styleCard(it){
 
 function openCard(id){
   const it=M.ITEMS.find(x=>x.id===id); if(!it) return;
-  const wasOpen=!!cardItem;
-  cardItem=it; cardEditing=false;
+  const wasOpen=cardIsOpen();
+  cardItem=it; cardEditing=false; cardNew=null;
   sheetCard.classList.remove('editing');
   styleCard(it);
   renderCard();
@@ -275,9 +276,10 @@ function openCard(id){
   sheetCard.focus({preventScroll:true});
 }
 function closeCard(){
-  if(!cardItem) return;
+  if(!cardIsOpen()) return;
   clearTimeout(cardTimer); cardTimer=null;
-  cardItem=null; cardEditing=false;
+  cardItem=null; cardEditing=false; cardNew=null;
+  sheetCard.classList.remove('editing');
   sheet.classList.remove('on'); sheet.setAttribute('aria-hidden','true');
   document.body.classList.remove('sheet-open');
   if(cardReturnFocus && document.contains(cardReturnFocus)) cardReturnFocus.focus({preventScroll:true});
@@ -361,24 +363,31 @@ function saveEdit(){
   if(!err){ try{ buildModel(cfg); }catch(e){ err=e.message; } }
   if(err){ captureAndRerender(err); return; }
 
-  let name=curName;
-  if(!TripStore.get(name)){
-    const suggested=(cfg.title||'My trip')+(curName==='__demo'?' (my copy)':'');
-    const ans=prompt('This trip is not saved in this browser yet, so your edit will be saved as a new trip. Name it:', suggested);
-    if(ans==null) return;
-    name=ans.trim();
-    if(!name){ captureAndRerender('Give the trip a name to save your edit.'); return; }
-    if(TripStore.get(name) && !confirm('Replace the saved trip "'+name+'" with this one?')) return;
-  }
-  TripStore.save(name,cfg);
-  TripStore.setActive(name);
-  curName=name;
-  populateTripSel(name);
+  const name=persistTrip(cfg,'edit',captureAndRerender);
+  if(!name) return;
   const id=it.id;
   loadTrip(cfg,{keep:true});
   sheetCard.classList.remove('editing');
   openCard(id);
   toast('Saved to “'+name+'”');
+}
+/* save cfg to the library under the current trip's name (asking for one if it isn't saved yet);
+   returns the name, or null if the user backed out */
+function persistTrip(cfg,what,onErr){
+  let name=curName;
+  if(!TripStore.get(name)){
+    const suggested=(cfg.title||'My trip')+(curName==='__demo'?' (my copy)':'');
+    const ans=prompt('This trip is not saved in this browser yet, so your '+what+' will be saved as a new trip. Name it:', suggested);
+    if(ans==null) return null;
+    name=ans.trim();
+    if(!name){ onErr('Give the trip a name to save your '+what+'.'); return null; }
+    if(TripStore.get(name) && !confirm('Replace the saved trip "'+name+'" with this one?')) return null;
+  }
+  TripStore.save(name,cfg);
+  TripStore.setActive(name);
+  curName=name;
+  populateTripSel(name);
+  return name;
 }
 /* re-render the form with an error while keeping what the user typed */
 function captureAndRerender(err){
@@ -386,6 +395,168 @@ function captureAndRerender(err){
   $$('#scForm [data-f]').forEach(inp=>typed[inp.dataset.f]=inp.value);
   renderEditor(err);
   $$('#scForm [data-f]').forEach(inp=>{ if(typed[inp.dataset.f]!=null) inp.value=typed[inp.dataset.f]; });
+}
+
+/* ---------- adding ----------
+   The form works on generic keys (title, place, from/to, start/end…) that saveNew maps onto
+   the schema. Times are wall-clock values in the zone of the chosen place (from/to for travel),
+   so changing the place keeps the typed time and re-labels its zone. */
+const NEW_KINDS=[['activity','Activity',ICON.star],['stay','Stay',ICON.bed],['travel','Travel',ICON.flight],['note','Note',ICON.note]];
+const NEW_FIELDS={
+  activity:[['title','Name','wide'],['place','Place','place'],['start','Starts','dt'],['end','Ends','dt'],
+            ['addr','Address','wide'],['conf','Confirmation #'],['phone','Phone'],['det','Notes','area']],
+  stay:[['title','Name','wide'],['place','Place','place'],['start','Check-in','dt'],['end','Check-out','dt'],
+        ['addr','Address','wide'],['conf','Confirmation #'],['phone','Phone'],['det','Notes','area']],
+  travel:[['mode','Mode','mode'],['title','Title'],['from','From','place'],['to','To','place'],['start','Departs','dt'],['end','Arrives','dt'],
+          ['op','Operator / flight no.'],['conf','Confirmation / PNR'],['det','Notes','area']],
+  note:[['title','Name','wide'],['place','Place','place'],['start','When','dt'],['det','Notes','area']]
+};
+const NEW_REQUIRED={activity:['title','start'], stay:['title','start','end'], travel:['start','end'], note:['title','start']};
+let cardNew=null;
+
+function newColor(v){ return v.kind==='travel'? MODE_COLOR[v.mode]||MODE_COLOR.gap : MODE_COLOR[v.kind]; }
+function newZone(v,f){
+  const P=M.PLACES[v.kind==='travel'? (f==='end'?v.to:v.from) : v.place];
+  return P? P.off : 0;
+}
+function nextHour(ts,off){ return Math.ceil((ts+off*MIN)/HOUR)*HOUR-off*MIN; }
+/* suggested times around the playhead for each kind */
+function newTimes(v){
+  const so=newZone(v,'start'), eo=newZone(v,'end');
+  if(v.kind==='stay'){
+    const t=Math.floor((now+so*MIN)/DAY)*DAY-so*MIN+15*HOUR;
+    return {start:localInput(t,so), end:localInput(t+20*HOUR,eo)};
+  }
+  const t=nextHour(now,so);
+  return {start:localInput(t,so), end:v.kind==='travel'? localInput(t+2*HOUR,eo) : ''};
+}
+function freshId(cfg,prefix){
+  const used=new Set();
+  [['legs','L'],['stays','S'],['events','E']].forEach(([c,p])=>
+    (Array.isArray(cfg[c])?cfg[c]:[]).forEach((x,i)=>used.add(String(x&&x.id||p+(i+1)))));
+  let n=1;
+  while(used.has(prefix+n)) n++;
+  return prefix+n;
+}
+
+function openNewItem(name){
+  if(!M || !curCfg) return;
+  const wasOpen=cardIsOpen();
+  const here=M.locationAt(now).place;
+  const next=M.LEGS.find(l=>l.t0>=now && l.to!==here);
+  const other=M.placeKeys.find(k=>k!==here)||here;
+  const v={kind:'activity', mode:'flight', title:name||'', place:here, from:here, to:next?next.to:other};
+  Object.assign(v,newTimes(v));
+  cardNew={vals:v, auto:newTimes(v)};
+  cardItem=null; cardEditing=false;
+  clearTimeout(cardTimer); cardTimer=null;
+  renderNewForm();
+  if(typeof hideTip==='function') hideTip();
+  sheet.classList.add('on'); sheet.setAttribute('aria-hidden','false');
+  document.body.classList.add('sheet-open');
+  if(!wasOpen) cardReturnFocus=document.activeElement;
+}
+function captureNew(){
+  $$('#scForm [data-f]').forEach(inp=>{ cardNew.vals[inp.dataset.f]=inp.value; });
+}
+function renderNewForm(err,focusField){
+  const v=cardNew.vals, kind=v.kind, req=NEW_REQUIRED[kind], color=newColor(v);
+  const kindDef=NEW_KINDS.find(k=>k[0]===kind);
+  sheetCard.style.setProperty('--c',color);
+  sheetCard.style.setProperty('--c2',color+'2e');
+  const placeOpts=sel=>M.placeKeys.map(k=>{
+    const P=M.PLACES[k];
+    return '<option value="'+esc(k)+'"'+(k===sel?' selected':'')+'>'+esc(P.n+(P.r?', '+P.r:''))+'</option>';
+  }).join('');
+  const fields=NEW_FIELDS[kind].map(([f,label,type])=>{
+    const val=v[f]||'', need=req.includes(f);
+    let input;
+    if(type==='dt'){
+      input='<div class="dtwrap"><input type="datetime-local" data-f="'+f+'" value="'+esc(val)+'"'+(need?' required':'')+'>'+
+        '<span class="tz">'+tzLabel(newZone(v,f))+'</span></div>';
+    } else if(type==='place'){
+      input='<select data-f="'+f+'">'+placeOpts(val)+'</select>';
+    } else if(type==='mode'){
+      input='<select data-f="mode">'+LEG_MODES.map(m=>'<option value="'+m+'"'+(m===val?' selected':'')+'>'+esc(MODE_LABEL[m])+'</option>').join('')+'</select>';
+    } else if(type==='area'){
+      input='<textarea data-f="'+f+'" rows="4">'+esc(val)+'</textarea>';
+    } else {
+      const ph=kind==='travel'&&f==='title'? 'From → To' : '';
+      input='<input type="text" data-f="'+f+'" value="'+esc(val)+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+(f==='phone'?' inputmode="tel"':'')+(need?' required':'')+'>';
+    }
+    return '<label class="fld'+(type==='area'||type==='wide'?' full':'')+'"><span>'+esc(label)+'</span>'+input+'</label>';
+  }).join('');
+  sheetCard.innerHTML=
+    '<header class="sc-head"><div class="grab"></div>'+
+      '<div class="kick"><span class="badge">'+solid(kindDef[2])+'New '+esc(kindDef[1].toLowerCase())+'</span>'+
+        '<span class="daylbl">'+esc(M.title)+'</span>'+
+        '<button type="button" class="x" data-close title="Close (Esc)" aria-label="Close">'+ico(LINE_ICON.close)+'</button></div>'+
+      '<h2 id="scTitle">Add to the itinerary</h2>'+
+    '</header>'+
+    '<div class="sc-body"><form class="sc-form" id="scForm" novalidate>'+
+      '<div class="sc-kinds" role="group" aria-label="Kind of item">'+NEW_KINDS.map(([k,l,ic])=>
+        '<button type="button" data-kind="'+k+'"'+(k===kind?' class="on" aria-pressed="true"':' aria-pressed="false"')+'>'+solid(ic)+esc(l)+'</button>').join('')+'</div>'+
+      (err?'<div class="sc-err">'+esc(err)+'</div>':'')+fields+
+      '<p class="sc-formnote">New places, pins and other details are added in the <a href="editor.html">full trip editor</a>.</p>'+
+    '</form></div>'+
+    '<footer class="sc-foot"><button type="button" class="sc-btn" data-cancel>Cancel</button><span class="sp"></span>'+
+      '<button type="button" class="sc-btn primary" data-save>'+ico(LINE_ICON.check)+'Add</button></footer>';
+  sheetCard.classList.add('editing');
+  const e=$('#scForm .sc-err');
+  if(e){ e.scrollIntoView({block:'nearest'}); sheetCard.focus({preventScroll:true}); return; }
+  const target=$('#scForm [data-f="'+(focusField||'title')+'"]')||$('#scForm [data-f]');
+  if(target){
+    target.focus();
+    if(!focusField && target.setSelectionRange) target.setSelectionRange(target.value.length,target.value.length);
+  }
+}
+function setNewKind(kind){
+  captureNew();
+  const v=cardNew.vals, a=cardNew.auto;
+  const untouched=v.start===a.start && v.end===a.end;
+  v.kind=kind;
+  cardNew.auto=newTimes(v);
+  if(untouched) Object.assign(v,cardNew.auto);
+  renderNewForm(null,null);
+  const b=$('.sc-kinds [data-kind="'+kind+'"]'); if(b) b.focus();
+}
+function saveNew(){
+  captureNew();
+  const v=cardNew.vals, kind=v.kind, t=s=>String(s||'').trim();
+  const missing=NEW_REQUIRED[kind].find(f=>!t(v[f]));
+  if(missing){
+    const label=NEW_FIELDS[kind].find(x=>x[0]===missing)[1];
+    renderNewForm(missing==='title'? 'Give the item a name.' : label+' needs a date and time.');
+    return;
+  }
+  const cfg=JSON.parse(JSON.stringify(curCfg));
+  const iso=f=>t(v[f])+':00'+offIso(newZone(v,f));
+  let coll, prefix, entry;
+  if(kind==='travel'){
+    coll='legs'; prefix='L';
+    entry={mode:v.mode, from:v.from, to:v.to, dep:iso('start'), arr:iso('end'), title:t(v.title), op:t(v.op)};
+  } else if(kind==='stay'){
+    coll='stays'; prefix='S';
+    entry={place:v.place, name:t(v.title), addr:t(v.addr), phone:t(v.phone), in:iso('start'), out:iso('end')};
+  } else {
+    coll='events'; prefix='E';
+    entry={kind, place:v.place, title:t(v.title), start:iso('start'), end:t(v.end)? iso('end') : '', addr:t(v.addr), phone:t(v.phone)};
+  }
+  Object.assign(entry,{conf:t(v.conf), det:t(v.det)});
+  Object.keys(entry).forEach(k=>{ if(entry[k]==null||entry[k]==='') delete entry[k]; });
+  entry=Object.assign({id:freshId(cfg,prefix)},entry);
+  if(!Array.isArray(cfg[coll])) cfg[coll]=[];
+  cfg[coll].push(entry);
+  try{ buildModel(cfg); }catch(e){ renderNewForm(e.message); return; }
+
+  const name=persistTrip(cfg,'new item',msg=>renderNewForm(msg));
+  if(!name) return;
+  loadTrip(cfg,{keep:true});
+  const q=$('#q');
+  if(q.value){ q.value=''; q.dispatchEvent(new Event('input')); }
+  const id=entry.id+(kind==='stay'?'i':''), it=M.ITEMS.find(x=>x.id===id);
+  if(it){ setNowForItem(id,it.t0); focusItem(id); }
+  toast('Added to “'+name+'”');
 }
 
 /* ---------- copy + toast ---------- */
@@ -420,14 +591,20 @@ sheet.addEventListener('click',e=>{
   const cp=e.target.closest('[data-copy]');
   if(cp){ copyText(cp.dataset.copy, cp.dataset.label, cp); return; }
   if(e.target.closest('[data-edit]')){ startEdit(); return; }
-  if(e.target.closest('[data-cancel]')){ cancelEdit(); return; }
-  if(e.target.closest('[data-save]')){ saveEdit(); return; }
+  const k=e.target.closest('[data-kind]');
+  if(k && cardNew){ setNewKind(k.dataset.kind); return; }
+  if(e.target.closest('[data-cancel]')){ if(cardNew) closeCard(); else cancelEdit(); return; }
+  if(e.target.closest('[data-save]')){ if(cardNew) saveNew(); else saveEdit(); return; }
 });
-sheet.addEventListener('submit',e=>{ e.preventDefault(); saveEdit(); });
+sheet.addEventListener('change',e=>{
+  const f=cardNew && e.target.dataset.f;
+  if(f==='mode'||f==='place'||f==='from'||f==='to'){ captureNew(); renderNewForm(null,f); }
+});
+sheet.addEventListener('submit',e=>{ e.preventDefault(); if(cardNew) saveNew(); else saveEdit(); });
 addEventListener('keydown',e=>{
-  if(!cardItem) return;
+  if(!cardIsOpen()) return;
   if(e.key==='Escape'){ e.preventDefault(); if(cardEditing) cancelEdit(); else closeCard(); }
-  else if(cardEditing && e.key==='Enter' && (e.metaKey||e.ctrlKey)){ e.preventDefault(); saveEdit(); }
+  else if((cardEditing||cardNew) && e.key==='Enter' && (e.metaKey||e.ctrlKey)){ e.preventDefault(); if(cardNew) saveNew(); else saveEdit(); }
   else if(e.key==='Tab'){
     const f=$$('a[href],button,input,textarea,select',sheetCard).filter(x=>!x.disabled && x.offsetParent!==null);
     if(!f.length) return;
