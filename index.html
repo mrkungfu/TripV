@@ -86,6 +86,14 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 }
 .stat b{display:block;font-size:14.5px;font-weight:650;letter-spacing:.2px;line-height:1.2}
 .stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--txt-faint);margin-top:1px}
+.statspop{
+  position:absolute;top:calc(100% - 2px);right:10px;z-index:1;width:min(300px,calc(100vw - 20px));
+  background:var(--panel-2);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:12px
+}
+.statspop[hidden]{display:none}
+.statspop .sp-sum{font-size:12.5px;color:var(--txt-dim);margin:0 2px 10px}
+.statspop .sp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.statspop .stat{min-width:0}
 .topbar .tabs{grid-area:tabs;justify-self:start;align-self:end}
 .tabs{display:flex;background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:11px;padding:3px;gap:2px}
 .tabs button{padding:6px 12px;border-radius:8px;font-size:13px;color:var(--txt-dim);display:flex;align-items:center;gap:7px}
@@ -211,7 +219,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .filters .fc:empty{display:none}
 .filters button.on .fc{color:#56627e}
 .filters button.none{opacity:.5}
-.liststats{display:none;font-size:11px;color:var(--txt-faint);letter-spacing:.03em;padding:0 2px}
 .tabs button[data-view="list"]{display:none}
 .list{overflow:auto;padding:6px 10px 26px;flex:1;scroll-behavior:smooth}
 .daygroup{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,var(--panel) 72%,rgba(17,26,46,0));
@@ -520,7 +527,12 @@ body.sheet-open{overflow:hidden}
   .brand h1{font-size:15px}
   .stats .stat:not(.stat-days){display:none}
   .stat{min-width:0;padding:4px 10px}
-  .liststats{display:block}
+  .topbar{position:relative;z-index:40}
+  .stats .stat-days{cursor:pointer;text-align:left;position:relative;padding-right:24px}
+  .stat-days::after{content:"";position:absolute;right:10px;top:50%;width:6px;height:6px;margin-top:-5px;
+    border:solid var(--txt-faint);border-width:0 1.5px 1.5px 0;transform:rotate(45deg);transition:transform .15s,margin-top .15s}
+  .stat-days[aria-expanded="true"]{border-color:var(--line);background:rgba(255,255,255,.08)}
+  .stat-days[aria-expanded="true"]::after{transform:rotate(-135deg);margin-top:-1px}
   .transport{grid-template-columns:1fr;gap:8px;position:sticky;bottom:0;z-index:30;padding:8px 10px calc(10px + env(safe-area-inset-bottom));
     background:rgba(10,16,32,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line-soft)}
   .transport .tabs{justify-self:stretch;align-self:auto}
@@ -562,6 +574,7 @@ body.sheet-open{overflow:hidden}
       <div class="sub" id="brandSub">—</div>
     </div>
     <div class="stats" id="stats"></div>
+    <div class="statspop" id="statsPop" role="dialog" aria-label="Trip stats" hidden></div>
     <nav class="tabs" id="tabs">
       <button data-view="map" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3z"/><path d="M9 3v15M15 6v15"/></svg>Map</button>
       <button data-view="journey"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 20h18"/><path d="M4 16h4l3-6 3 9 3-11 2 4h2"/></svg>Journey</button>
@@ -665,7 +678,6 @@ body.sheet-open{overflow:hidden}
           <button data-f="gap"><i style="color:var(--gap)"></i>Gaps<span class="fc"></span></button>
           <button data-f="warn"><i style="color:var(--warn)"></i>Watch-outs<span class="fc"></span></button>
         </div>
-        <div class="liststats" id="listStats"></div>
       </div>
       <div class="list" id="list"></div>
     </aside>
