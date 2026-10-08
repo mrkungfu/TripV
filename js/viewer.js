@@ -747,13 +747,24 @@ function buildHeader(){
     [(km>=1500? Math.round(km/1000)+'k' : Math.round(km)),'km'],[flights,'flights'],[ground,'ground'],
     [M.STAYS.length,'stays']
   ];
-  $('#stats').innerHTML=rows.map(r=>'<div class="stat'+(r[1]==='days'?' stat-days':'')+'"><b>'+r[0]+'</b><span>'+r[1]+'</span></div>').join('');
+  const stat=r=>'<b>'+r[0]+'</b><span>'+r[1]+'</span>';
+  $('#stats').innerHTML=rows.map(r=>r[1]==='days'
+    ? '<button type="button" class="stat stat-days" id="statDays" aria-haspopup="dialog" aria-controls="statsPop" aria-expanded="false" title="Trip stats">'+stat(r)+'</button>'
+    : '<div class="stat">'+stat(r)+'</div>').join('');
   const places=M.placeKeys.length;
-  $('#listStats').textContent=places+' place'+(places===1?'':'s')+' in '+countries+' countr'+(countries===1?'y':'ies')+
-    ' · '+rows[3][0]+' km travelled';
+  $('#statsPop').innerHTML='<div class="sp-sum">'+places+' place'+(places===1?'':'s')+' in '+countries+' countr'+(countries===1?'y':'ies')+
+    ' · '+rows[3][0]+' km travelled</div><div class="sp-grid">'+rows.map(r=>'<div class="stat">'+stat(r)+'</div>').join('')+'</div>';
+  setStatsPop(false);
   $('#tripSel').title=M.title+' — switch between trips saved in this browser';
   $('#brandSub').textContent=fmt(M.T0,M.originOff,'D')+'  →  '+fmt(M.T1,M.originOff,'D');
   document.title=M.title+' · Trip visualizer';
+}
+
+// narrow screens only show the days pill in the header; it opens a card with the rest of the stats
+function setStatsPop(open){
+  open=open&&narrow.matches;
+  $('#statsPop').hidden=!open;
+  const b=$('#statDays'); if(b) b.setAttribute('aria-expanded',open);
 }
 
 /* ============================================================
@@ -1022,8 +1033,18 @@ function bindUI(){
     setView(b.dataset.view);
   });
 
+  /* trip stats card */
+  $('#stats').addEventListener('click',e=>{
+    if(e.target.closest('#statDays')) setStatsPop($('#statsPop').hidden);
+  });
+  document.addEventListener('pointerdown',e=>{
+    if(!$('#statsPop').hidden && !e.target.closest('#statsPop, #statDays')) setStatsPop(false);
+  });
+  narrow.addEventListener('change',()=>setStatsPop(false));
+
   /* keyboard */
   addEventListener('keydown',e=>{
+    if(e.key==='Escape' && !$('#statsPop').hidden){ setStatsPop(false); $('#statDays').focus(); return; }
     if(cardIsOpen() || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if(e.target.closest && e.target.closest('#list .card, #roLoc.has-item') && (e.key==='Enter'||e.code==='Space')) return;
     if(e.code==='Space'){ e.preventDefault(); togglePlay(); }

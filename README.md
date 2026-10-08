@@ -72,10 +72,10 @@ sits beside the current view. Each filter chip shows how many
 bookings it covers within the current search (a stay counts once, not once for check-in and again for check-out).
 
 On narrow screens (≤ 940 px) the selected view fills the space between the header and the
-footer. The header keeps only the day count next to the trip name, the tabs move into the
-footer above the time and current-item readout, and the itinerary appears only in List
-view, where the filter counts and a places / countries / distance line stand in for the
-header stats.
+footer. The header keeps only the day count next to the trip name; tapping it opens a card with
+the places / countries / distance summary and the rest of the trip stats. The tabs move
+into the footer above the time and current-item readout, and the itinerary appears only
+in List view.
 
 ## Item cards
 
