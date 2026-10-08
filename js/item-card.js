@@ -625,35 +625,96 @@ sheet.addEventListener('change',e=>{
 });
 sheet.addEventListener('submit',e=>{ e.preventDefault(); if(cardNew) saveNew(); else saveEdit(); });
 
-/* touch: drag the header down to dismiss a card that is being viewed (not edited or created) */
+/* ---------- stepping between items ----------
+   Follows the itinerary list as currently filtered; an item opened from the map that the
+   filter hides still gets its neighbours from the full list. */
+function cardNeighbor(dir){
+  if(!cardItem) return null;
+  let seq=M.ITEMS.filter(it=>passes(it));
+  if(!seq.includes(cardItem)) seq=M.ITEMS;
+  return seq[seq.indexOf(cardItem)+dir]||null;
+}
+function stepCard(dir){
+  const it=cardNeighbor(dir);
+  if(!it) return false;
+  setNowForItem(it.id,it.t0);
+  focusItem(it.id);
+  return true;
+}
+/* slide the open card out towards the swipe, swap in the neighbour, and slide that in from the far side */
+function slideCard(dir){
+  if(!cardNeighbor(dir)){ sheetCard.style.transform=''; sheetCard.style.opacity=''; return; }
+  const w=sheetCard.offsetWidth;
+  cardSliding=true;
+  sheetCard.style.transform='translateX('+(-dir*w)+'px)';
+  sheetCard.style.opacity='0';
+  clearTimeout(cardDragTimer);
+  cardDragTimer=setTimeout(()=>{
+    cardSliding=false;
+    if(!cardItem || !stepCard(dir)){ sheetCard.style.transform=''; sheetCard.style.opacity=''; return; }
+    sheet.classList.add('dragging');
+    sheetCard.style.transform='translateX('+(dir*w*.35)+'px)';
+    sheetCard.style.opacity='0';
+    void sheetCard.offsetWidth;
+    sheet.classList.remove('dragging');
+    sheetCard.style.transform=''; sheetCard.style.opacity='';
+  },170);
+}
+
+/* touch, on a card being viewed (not edited or created): drag the header down to dismiss,
+   or swipe anywhere on the card sideways to step to the previous / next item */
+let cardSliding=false, cardSwiped=false;
 sheetCard.addEventListener('pointerdown',e=>{
-  if(e.pointerType==='mouse' || cardEditing || cardNew || cardDrag || !e.target.closest('.sc-head')) return;
-  cardDrag={id:e.pointerId, x:e.clientX, y:e.clientY, dy:0, v:0, lastY:e.clientY, lastT:e.timeStamp, on:false};
+  if(e.pointerType==='mouse' || cardEditing || cardNew || cardDrag || cardSliding || !cardItem) return;
+  cardDrag={id:e.pointerId, x:e.clientX, y:e.clientY, d:0, v:0, last:0, lastT:e.timeStamp, axis:null,
+            head:!!e.target.closest('.sc-head')};
 });
 sheetCard.addEventListener('pointermove',e=>{
-  if(!cardDrag || e.pointerId!==cardDrag.id) return;
-  const dy=e.clientY-cardDrag.y, dx=e.clientX-cardDrag.x;
-  if(!cardDrag.on){
-    if(Math.abs(dx)>10 && Math.abs(dx)>dy){ cardDrag=null; return; }
-    if(dy<8) return;
-    cardDrag.on=true;
+  const d=cardDrag;
+  if(!d || e.pointerId!==d.id) return;
+  const dy=e.clientY-d.y, dx=e.clientX-d.x, ax=Math.abs(dx), ay=Math.abs(dy);
+  if(!d.axis){
+    if(ax>10 && ax>ay*1.2){
+      d.axis='x';
+      d.prev=cardNeighbor(-1); d.next=cardNeighbor(1);
+    } else if(d.head && dy>8 && dy>ax) d.axis='y';
+    else { if(ay>10) cardDrag=null; return; }
     sheet.classList.add('dragging');
     sheetCard.setPointerCapture(e.pointerId);
   }
-  const dt=e.timeStamp-cardDrag.lastT;
-  if(dt>0) cardDrag.v=(e.clientY-cardDrag.lastY)/dt;
-  cardDrag.lastY=e.clientY; cardDrag.lastT=e.timeStamp;
-  cardDrag.dy=Math.max(0,dy);
-  sheetCard.style.transform='translateY('+cardDrag.dy+'px)';
-  sheetBack.style.opacity=String(1-Math.min(1,cardDrag.dy/sheetCard.offsetHeight));
+  const pos=d.axis==='x'? dx : dy;
+  const dt=e.timeStamp-d.lastT;
+  if(dt>0) d.v=(pos-d.last)/dt;
+  d.last=pos; d.lastT=e.timeStamp;
+  if(d.axis==='y'){
+    d.d=Math.max(0,dy);
+    sheetCard.style.transform='translateY('+d.d+'px)';
+    sheetBack.style.opacity=String(1-Math.min(1,d.d/sheetCard.offsetHeight));
+  } else {
+    d.d=dx;
+    const open=dx<0? d.next : d.prev;
+    const shown=open? dx : dx*.3;
+    sheetCard.style.transform='translateX('+shown+'px)';
+    if(open) sheetCard.style.opacity=String(1-Math.min(.6,Math.abs(dx)/sheetCard.offsetWidth));
+  }
 });
 function endDrag(e){
   if(!cardDrag || e.pointerId!==cardDrag.id) return;
   const d=cardDrag; cardDrag=null;
-  if(!d.on) return;
+  if(!d.axis) return;
   sheet.classList.remove('dragging');
   sheetBack.style.opacity='';
-  const dismiss=e.type==='pointerup' && (d.dy>Math.min(140,sheetCard.offsetHeight*.3) || (d.v>.5 && d.dy>30));
+  cardSwiped=true; setTimeout(()=>{ cardSwiped=false; },0);
+  const up=e.type==='pointerup';
+  if(d.axis==='x'){
+    const dir=d.d<0? 1 : -1;
+    const go=up && (dir>0? d.next : d.prev) &&
+      (Math.abs(d.d)>Math.min(100,sheetCard.offsetWidth*.25) || (Math.abs(d.v)>.4 && Math.abs(d.d)>30 && Math.sign(d.v)===-dir));
+    if(go) slideCard(dir);
+    else { sheetCard.style.transform=''; sheetCard.style.opacity=''; }
+    return;
+  }
+  const dismiss=up && (d.d>Math.min(140,sheetCard.offsetHeight*.3) || (d.v>.5 && d.d>30));
   if(!dismiss){ sheetCard.style.transform=''; return; }
   sheetCard.style.transform='translateY(100%)';
   closeCard();
@@ -662,9 +723,16 @@ function endDrag(e){
 }
 sheetCard.addEventListener('pointerup',endDrag);
 sheetCard.addEventListener('pointercancel',endDrag);
+/* a swipe that started on a copy row must not also copy it */
+sheetCard.addEventListener('click',e=>{ if(cardSwiped){ e.stopPropagation(); e.preventDefault(); } },true);
 addEventListener('keydown',e=>{
   if(!cardIsOpen()) return;
   if(e.key==='Escape'){ e.preventDefault(); if(cardEditing) cancelEdit(); else closeCard(); }
+  else if(cardItem && !cardEditing && (e.key==='ArrowLeft'||e.key==='ArrowRight') && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey &&
+          !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)){
+    e.preventDefault();
+    if(!cardSliding) slideCard(e.key==='ArrowRight'? 1 : -1);
+  }
   else if((cardEditing||cardNew) && e.key==='Enter' && (e.metaKey||e.ctrlKey)){ e.preventDefault(); if(cardNew) saveNew(); else saveEdit(); }
   else if(e.key==='Tab'){
     const f=$$('a[href],button,input,textarea,select',sheetCard).filter(x=>!x.disabled && x.offsetParent!==null);

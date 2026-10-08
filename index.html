@@ -494,6 +494,7 @@ body.sheet-open{overflow:hidden}
   .toast{bottom:calc(20px + env(safe-area-inset-bottom))}
 }
 .sc-head{touch-action:none}
+.sheet-card:not(.editing) .sc-body{touch-action:pan-y}
 .sheet.dragging .sheet-card,.sheet.dragging .sheet-back{transition:none}
 /* iOS zooms the page into any focused field set below 16px */
 @media (hover:none) and (pointer:coarse){
