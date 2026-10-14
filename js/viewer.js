@@ -515,7 +515,7 @@ function renderList(){
   CARDS=$$('#list .card').map(el=>{
     const id=el.dataset.id;
     const it=M.ITEMS.find(x=>x.id===id);
-    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, id};
+    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, id, transit:!!it&&M.LEGS.includes(it.ref), gap:!!it&&it.cls==='gap'};
   });
   lastActive=-2;
   syncList(now,true);
@@ -547,7 +547,19 @@ function lastStartedIndex(ts){
   for(let i=0;i<CARDS.length;i++){ if(CARDS[i].t<=ts+1) idx=i; else break; }
   return idx;
 }
+/* the latest-started plane / train / bus / … leg still under way at ts, so a check-in or check-out
+   that falls mid-journey doesn't steal the focus */
+function transitUnderwayIndex(ts){
+  let idx=-1, gap=-1;
+  for(let i=0;i<CARDS.length && CARDS[i].t<=ts+1;i++){
+    const c=CARDS[i];
+    if(c.transit && ts<c.t1){ if(c.gap) gap=i; else idx=i; }
+  }
+  return idx>=0 ? idx : gap;
+}
 function nowHighlightIndex(ts){
+  const moving=transitUnderwayIndex(ts);
+  if(moving>=0) return moving;
   const start=calDayStart(Date.now()), end=start+DAY;
   let firstToday=-1;
   for(let i=0;i<CARDS.length;i++){
