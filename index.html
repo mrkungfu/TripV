@@ -539,6 +539,13 @@ body.sheet-open{overflow:hidden}
   .transport .tabs{justify-self:stretch;align-self:auto}
   .transport .tabs button{flex:1 1 0;justify-content:center;padding:6px 4px;min-width:0}
   .playgrp{justify-content:center}
+  /* list view: no player, just the slider with NOW beside it */
+  .app.list-view .transport{grid-template-columns:minmax(0,1fr) auto;column-gap:10px}
+  .app.list-view .transport .tabs,.app.list-view .transport .readout{grid-column:1/-1}
+  .app.list-view .playgrp{display:contents}
+  .app.list-view .playgrp>:not(#toNow){display:none}
+  .app.list-view .scrubwrap{grid-column:1;grid-row:3}
+  .app.list-view #toNow{grid-column:2;grid-row:3;align-self:end;margin-bottom:-4px}
   .readout{justify-content:space-between}
   .ro-time{width:178px;text-align:left}
   .ro-time b{font-size:14px}
