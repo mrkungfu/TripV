@@ -223,14 +223,14 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .list{overflow:auto;padding:6px 10px 26px;flex:1;scroll-behavior:smooth}
 .daygroup{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,var(--panel) 72%,rgba(17,26,46,0));
   padding:11px 2px 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint);
-  display:flex;align-items:baseline;gap:8px}
+  display:flex;align-items:baseline;gap:8px;height:35px}
 .daygroup b{color:var(--txt);font-size:12.5px;letter-spacing:.04em;font-weight:650}
 .daygroup .dnum{margin-left:auto;font-size:10px;color:#4c5a7c;letter-spacing:.06em;text-transform:none}
 .daygroup.past{color:#3e4964}
 .daygroup.past b{color:#5d6886;font-weight:550}
 .daygroup.past .dnum{color:#36405a}
-.daygroup.today{color:var(--txt);padding-top:13px}
-.daygroup.today b{color:var(--flight);font-size:14px;letter-spacing:.03em;font-weight:700;text-shadow:0 0 10px rgba(247,185,85,.35)}
+.daygroup.today{color:var(--txt)}
+.daygroup.today b{color:var(--flight);font-size:14px;line-height:1;letter-spacing:.03em;font-weight:700;text-shadow:0 0 10px rgba(247,185,85,.35)}
 .daygroup.today .dnum{color:var(--flight);opacity:.85}
 .daygroup.today .dnum::before{content:"Today · ";font-weight:650}
 .card{
