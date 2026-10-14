@@ -495,7 +495,7 @@ function renderList(){
     if(key!==lastKey){
       lastKey=key;
       const n=daysAhead(it.t0);
-      html+='<div class="daygroup"><b>'+fmt(it.t0,it.off,'d')+'</b>'+esc(M.PLACES[it.place].n)+
+      html+='<div class="daygroup '+(n<0?'past':n===0?'today':'future')+'"><b>'+fmt(it.t0,it.off,'d')+'</b>'+esc(M.PLACES[it.place].n)+
             '<span class="dnum"'+(n>0?' title="in '+n+' day'+(n===1?'':'s')+'"':'')+'>'+dayLabel(it.t0)+'</span></div>';
     }
     html+='<div class="card" role="button" tabindex="0" data-id="'+esc(it.id)+'" data-t="'+it.t0+'">'+
