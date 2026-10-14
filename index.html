@@ -226,6 +226,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   display:flex;align-items:baseline;gap:8px}
 .daygroup b{color:var(--txt);font-size:12.5px;letter-spacing:.04em;font-weight:650}
 .daygroup .dnum{margin-left:auto;font-size:10px;color:#4c5a7c;letter-spacing:.06em;text-transform:none}
+.daygroup.past{color:#3e4964}
+.daygroup.past b{color:#5d6886;font-weight:550}
+.daygroup.past .dnum{color:#36405a}
+.daygroup.today{color:var(--txt);padding-top:13px}
+.daygroup.today b{color:var(--flight);font-size:14px;letter-spacing:.03em;font-weight:700;text-shadow:0 0 10px rgba(247,185,85,.35)}
+.daygroup.today .dnum{color:var(--flight);opacity:.85}
+.daygroup.today .dnum::before{content:"Today · ";font-weight:650}
 .card{
   position:relative;display:grid;grid-template-columns:54px 1fr;gap:10px;
   padding:9px 10px 9px 8px;border-radius:11px;border:1px solid transparent;margin-bottom:3px;cursor:pointer;
