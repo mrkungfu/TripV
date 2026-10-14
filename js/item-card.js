@@ -166,10 +166,10 @@ function stayCard(it){
     '<div class="ep '+side+'"><div class="lbl">'+lbl+'</div>'+
       '<div class="tm big">'+fmt(t,P.off,'t')+'</div>'+
       '<div class="dt">'+fmt(t,P.off,'d')+' · '+tzLabel(P.off)+'</div></div>';
-  const blk='<div class="route-blk stay">'+
-    col('Check-in',s.t0,'from'+(isOut?'':' hl'))+
+  const blk='<div class="route-blk stay'+(Date.now()>s.t1?' past':'')+'">'+
+    col('Check-in',s.t0,'from'+(isOut?' dim':' hl'))+
     midTrack(s.t0,s.t1,ICON.bed,it.color,{label:nn+' night'+(nn>1?'s':'')})+
-    col('Check-out',s.t1,'to'+(isOut?' hl':''))+
+    col('Check-out',s.t1,'to'+(isOut?' hl':' dim'))+
   '</div>';
   const c=contactRows(s,s.det);
   let dest=null, destLbl='';
