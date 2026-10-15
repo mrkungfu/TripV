@@ -655,7 +655,8 @@ function render(listForce){
   syncList(now,listForce);
   const L=M.locationAt(now);
   const off=L.moving? (L.f<.5?L.leg.A.off:L.leg.B.off) : L.P.off;
-  $('#roTime').textContent=fmt(now,off,'t')+'  '+tzLabel(off);
+  const wall=Date.now(), isNow=liveNow && wall>=M.T0 && wall<=M.T1;
+  $('#roTime').innerHTML=(isNow?'Now · ':'')+fmt(now,off,'t')+'<span class="tz">'+tzLabel(off)+'</span>';
   $('#roDate').textContent=fmt(now,off,'D')+'  ·  day '+M.dayNo(now)+' of '+M.TOTAL_DAYS;
   const ic=$('#roIcon');
   let roItem=null, roTitle=null;
