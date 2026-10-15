@@ -487,18 +487,17 @@ function passes(it,f){
 }
 function renderList(){
   const listEl=$('#list');
-  let html='', lastKey='', n=0;
+  let html='', lastKey='', dayT=0, n=0;
   M.ITEMS.forEach(it=>{
     if(!passes(it)) return;
     n++;
     const key=fmt(it.t0,it.off,'k');
     if(key!==lastKey){
-      lastKey=key;
-      const n=daysAhead(it.t0);
-      html+='<div class="daygroup '+(n<0?'past':n===0?'today':'future')+'"><b>'+fmt(it.t0,it.off,'d')+'</b>'+esc(M.PLACES[it.place].n)+
-            '<span class="dnum"'+(n>0?' title="in '+n+' day'+(n===1?'':'s')+'"':'')+'>'+dayLabel(it.t0)+'</span></div>';
+      lastKey=key; dayT=it.t0;
+      html+='<div class="daygroup" data-t="'+it.t0+'"><b>'+fmt(it.t0,it.off,'d')+'</b>'+esc(M.PLACES[it.place].n)+
+            '<span class="dnum"></span></div>';
     }
-    html+='<div class="card" role="button" tabindex="0" data-id="'+esc(it.id)+'" data-t="'+it.t0+'">'+
+    html+='<div class="card" role="button" tabindex="0" data-id="'+esc(it.id)+'" data-t="'+it.t0+'" data-day="'+dayT+'">'+
       '<div class="rail" style="background:'+it.color+'"></div>'+
       '<div class="when"><b>'+fmt(it.t0,it.off,'t')+'</b><span>'+tzLabel(it.off)+'</span></div>'+
       '<div class="body">'+
@@ -507,6 +506,7 @@ function renderList(){
         '<div class="meta">'+it.tags.map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+
           (it.warn?'<span class="tag warn">⚠ heads-up</span>':'')+'</div>'+
       '</div>'+
+      '<svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Completed"><title>Completed</title><path d="M5 12.5l4.5 4.5L19 7"/></svg>'+
       '<svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>'+
     '</div>';
   });
@@ -515,10 +515,26 @@ function renderList(){
   CARDS=$$('#list .card').map(el=>{
     const id=el.dataset.id;
     const it=M.ITEMS.find(x=>x.id===id);
-    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, id, transit:!!it&&M.LEGS.includes(it.ref), gap:!!it&&it.cls==='gap'};
+    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, day:+el.dataset.day, id, transit:!!it&&M.LEGS.includes(it.ref), gap:!!it&&it.cls==='gap'};
   });
+  syncListStatus();
   lastActive=-2;
   syncList(now,true);
+}
+/* past / today / future by the wall clock: earlier days fade out, and today's items tick off once they're over */
+function syncListStatus(){
+  $$('#list .daygroup').forEach(h=>{
+    const t=+h.dataset.t, n=daysAhead(t), d=$('.dnum',h);
+    h.className='daygroup '+(n<0?'past':n===0?'today':'future');
+    d.textContent=dayLabel(t);
+    if(n>0) d.title='in '+n+' day'+(n===1?'':'s'); else d.removeAttribute('title');
+  });
+  const wall=Date.now();
+  CARDS.forEach(c=>{
+    const n=daysAhead(c.day);
+    c.el.classList.toggle('past',n<0);
+    c.el.classList.toggle('done',n===0 && wall>=c.t1);
+  });
 }
 /* bookings per filter within the current search — a stay counts once, not once for check-in and again for check-out */
 function renderFilterCounts(){
@@ -645,7 +661,7 @@ function refreshLive(){
 }
 function scheduleLiveTick(){
   clearTimeout(liveTimer);
-  liveTimer=setTimeout(()=>{ refreshLive(); scheduleLiveTick(); }, MIN-Date.now()%MIN+50);
+  liveTimer=setTimeout(()=>{ refreshLive(); if(M) syncListStatus(); scheduleLiveTick(); }, MIN-Date.now()%MIN+50);
 }
 function render(listForce){
   updateRoutes(now);
@@ -1147,6 +1163,6 @@ bindUI();
   scheduleLiveTick();
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden) return;
-    refreshLive(); scheduleLiveTick();
+    refreshLive(); if(M) syncListStatus(); scheduleLiveTick();
   });
 })();

@@ -254,6 +254,12 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .card .go{position:absolute;right:7px;top:50%;width:15px;height:15px;margin-top:-7.5px;color:var(--txt-faint);opacity:0;transition:opacity .12s,transform .12s}
 .card:hover .go,.card:focus-visible .go{opacity:.9;transform:translateX(2px)}
 .card:focus-visible{outline:2px solid #3a4b78;outline-offset:-1px}
+.card.past{opacity:.42;transition:opacity .12s}
+.card.past:hover,.card.past:focus-visible{opacity:.7}
+.card.past.is-active{opacity:.8}
+.card .chk{display:none;position:absolute;right:7px;top:50%;width:15px;height:15px;margin-top:-7.5px;color:#4ade80;transition:opacity .12s}
+.card.done .chk{display:block}
+.card.done:hover .chk,.card.done:focus-visible .chk{opacity:0}
 .emptylist{padding:26px 8px;text-align:center;color:var(--txt-faint);font-size:12.5px}
 
 /* ---------- transport / scrubber ---------- */
