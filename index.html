@@ -292,7 +292,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 /* fixed widths so the readout doesn't jitter as the text changes during playback */
 .ro-time{text-align:right;width:188px;flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
 .ro-time b{display:block;font-size:15px;font-weight:650;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis}
-.ro-time span{display:block;font-size:10.5px;color:var(--txt-faint);letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis}
+.ro-time>span{display:block;font-size:10.5px;color:var(--txt-faint);letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis}
+.ro-time .tz{font-size:10.5px;font-weight:500;color:var(--txt-faint);opacity:.75;letter-spacing:.03em;margin-left:6px}
 .ro-loc{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);
   border-radius:11px;padding:6px 12px;width:300px;flex:none;min-width:0}
 .ro-loc.has-item{cursor:pointer;transition:border-color .15s,background .15s}
@@ -686,13 +687,11 @@ body.sheet-open{overflow:hidden}
           </button>
         </div>
         <div class="filters" id="filters">
-          <button data-f="all" class="on">Everything<span class="fc"></span></button>
+          <button data-f="all" class="on">All<span class="fc"></span></button>
           <button data-f="flight"><i style="color:var(--flight)"></i>Flights<span class="fc"></span></button>
-          <button data-f="ground"><i style="color:var(--bus)"></i>Ground<span class="fc"></span></button>
+          <button data-f="ground"><i style="color:var(--bus)"></i>Transport<span class="fc"></span></button>
           <button data-f="stay"><i style="color:var(--stay)"></i>Stays<span class="fc"></span></button>
-          <button data-f="activity"><i style="color:var(--act)"></i>Doing<span class="fc"></span></button>
-          <button data-f="gap"><i style="color:var(--gap)"></i>Gaps<span class="fc"></span></button>
-          <button data-f="warn"><i style="color:var(--warn)"></i>Watch-outs<span class="fc"></span></button>
+          <button data-f="activity"><i style="color:var(--act)"></i>Activities<span class="fc"></span></button>
         </div>
       </div>
       <div class="list" id="list"></div>
