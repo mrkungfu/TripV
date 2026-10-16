@@ -485,15 +485,15 @@ body.sheet-open{overflow:hidden}
 .ep-mid .plane.fly svg{transform:rotate(90deg)}
 .ep-mid .du{font-size:11.5px;color:var(--txt-dim);margin-top:5px;white-space:nowrap}
 .ep-mid .km{font-size:11px;color:var(--txt-faint);margin-top:1px;white-space:nowrap;font-variant-numeric:tabular-nums}
+/* the clock change sits at the foot of the middle column, level with the date · UTC offset line on either side */
+.route-blk .ep-mid{align-self:stretch}
+.ep-mid .tzc{margin-top:auto;padding-top:4px;display:flex;align-items:center;gap:4px;font-size:11.5px;line-height:1.45;
+  color:var(--txt-dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ep-mid .tzc svg{width:11px;height:11px;flex:none;color:var(--txt-faint)}
 .when-blk{display:flex;align-items:center;gap:13px;margin:0 0 16px}
 .when-blk .ic{width:44px;height:44px;border-radius:13px;background:var(--c2);display:flex;align-items:center;justify-content:center;flex:none}
 .when-blk .ic svg{width:22px;height:22px}
 .when-blk .tm{margin-top:0}
-
-.sc-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;margin-bottom:12px}
-.tile{background:rgba(255,255,255,.035);border:1px solid var(--line-soft);border-radius:12px;padding:8px 11px}
-.tile span{display:block;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--txt-faint)}
-.tile b{display:block;font-size:14.5px;font-weight:650;margin-top:1px}
 .sc-rows{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
 .cp{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:9px 11px;border-radius:12px;
   background:rgba(255,255,255,.035);border:1px solid var(--line-soft);transition:background .12s,border-color .12s}

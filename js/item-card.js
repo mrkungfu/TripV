@@ -25,7 +25,8 @@ const LINE_ICON={
   close:'M6 6l12 12M18 6 6 18',
   warn:'M12 3 2 20h20L12 3zM12 10v4M12 17.5v.01',
   map:'M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3zM9 3v15M15 6v15',
-  trash:'M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3'
+  trash:'M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3',
+  clock:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2'
 };
 const ico=(d,cls)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"'+
   (cls?' class="'+cls+'"':'')+'><path d="'+d+'"/></svg>';
@@ -89,10 +90,6 @@ function copyRow(label,value,icon,opts){
     '<span class="hint">'+ico(LINE_ICON.copy)+'<span>Copy</span></span>'+
   '</button>';
 }
-function tiles(list){
-  list=list.filter(Boolean);
-  return list.length? '<div class="sc-tiles">'+list.map(t=>'<div class="tile"><span>'+esc(t[0])+'</span><b>'+esc(t[1])+'</b></div>').join('')+'</div>' : '';
-}
 function contactRows(src,det,skipAddr){
   const n=fromNotes(det);
   let h='';
@@ -111,7 +108,12 @@ function midTrack(t0,t1,icon,color,opts){
       '<span class="plane'+(opts.fly?' fly':'')+'" style="left:'+(state==='live'?(p*100).toFixed(1):50)+'%">'+solid(icon,color)+'</span></div>'+
     '<span class="du">'+esc(opts.label)+'</span>'+
     (opts.km?'<span class="km">'+Math.round(opts.km).toLocaleString()+' km</span>':'')+
+    (opts.tz?'<span class="tzc" title="Time change">'+ico(LINE_ICON.clock)+tzShift(opts.tz)+'</span>':'')+
   '</div>';
+}
+function tzShift(m){
+  const a=Math.abs(m);
+  return (m>0?'+':'−')+Math.floor(a/60)+(a%60?':'+String(a%60).padStart(2,'0'):'')+' h';
 }
 function warnBlock(w){ return w? '<div class="sc-warn">'+ico(LINE_ICON.warn)+'<div>'+esc(w)+'</div></div>' : ''; }
 function notesBlock(d){ return d? '<section class="sc-notes"><h4>Notes</h4><p>'+esc(d)+'</p></section>' : ''; }
@@ -129,14 +131,10 @@ function legCard(it){
     '</div>';
   const route='<div class="route-blk">'+
     ep(A,codes&&codes[0],l.t0,A.off,'from')+
-    midTrack(l.t0,l.t1,it.icon,it.color,{gap, fly:l.mode==='flight', label:dur(l.t1-l.t0), km:l.km>=0.5?l.km:0})+
+    midTrack(l.t0,l.t1,it.icon,it.color,{gap, fly:l.mode==='flight', label:dur(l.t1-l.t0), km:l.km>=0.5?l.km:0, tz:B.off-A.off})+
     ep(B,codes&&codes[1],l.t1,B.off,'to',shift?'<sup>'+(shift>0?'+':'−')+Math.abs(shift)+'</sup>':'')+
   '</div>';
-  const tz=B.off-A.off;
-  const body=route+warnBlock(l.warn)+
-    tiles([
-      tz?['Time change',(tz>0?'+':'−')+Math.abs(tz)/60+' h']:null
-    ]);
+  const body=route+warnBlock(l.warn);
   let rows='';
   const n2=fromNotes(l.det), conf=l.conf||n2.conf, phone=l.phone||n2.phone;
   if(conf) rows+=copyRow('Confirmation / PNR',conf,LINE_ICON.ticket,{mono:true,big:true,note:l.conf?'':'from notes'});
