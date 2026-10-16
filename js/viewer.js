@@ -12,7 +12,7 @@ let curCfg=null, curName='__demo';            // raw config behind M, and its li
 let now=0, playing=false, speed=1, raf=null, last=0;
 const view={k:1,x:0,y:0}, base={x:0,y:0,w:1,h:1};
 let follow=false, fitSet=null, mapNeedsFit=false;
-let currentView='map', mapZoom='fit', liveNow=false;
+let currentView='map', mapZoom='fit', liveNow=false, calModePref=null;
 let filter='all', query='', CARDS=[], lastActive=-2, userScrolled=false, programScroll=false, scrollTimer=null, scrollRaf=null;
 let jOrder='seq', jGeom=null;
 const UI_PREFS_KEY='tripviz.ui';
@@ -184,10 +184,11 @@ function readUiPrefs(){
     const p=JSON.parse(localStorage.getItem(UI_PREFS_KEY)||'{}');
     if(['map','journey','calendar','chapters','list'].includes(p.view)) currentView=p.view;
     if(p.mapZoom==='fit'||p.mapZoom==='focus'||p.mapZoom==='follow') mapZoom=p.mapZoom;
+    if(p.calMode==='month'||p.calMode==='week') calModePref=p.calMode;
   }catch(e){}
 }
 function saveUiPrefs(){
-  try{ localStorage.setItem(UI_PREFS_KEY, JSON.stringify({view:currentView, mapZoom:mapZoom})); }catch(e){}
+  try{ localStorage.setItem(UI_PREFS_KEY, JSON.stringify({view:currentView, mapZoom:mapZoom, calMode:calModePref})); }catch(e){}
 }
 function syncZoomBtns(){
   $('#zFit').classList.toggle('on', !follow && mapZoom==='fit');
@@ -356,6 +357,7 @@ function buildCalendar(){
     months.push([y,mo]);
     mo++; if(mo>11){ mo=0; y++; }
   }
+  buildDayFlags();
   let html='';
   months.forEach(([yy,mm])=>{
     const firstDow=new Date(Date.UTC(yy,mm,1)).getUTCDay();
@@ -372,6 +374,7 @@ function buildCalendar(){
       const isToday=Date.now()>=dayStart&&Date.now()<dayEnd;
       const dots=evs.slice(0,5).map(()=>'<i></i>').join('');
       cells+='<div class="day in'+(isToday?' today':'')+(gapDay?' open':'')+'" data-t="'+sample+'" data-d0="'+dayStart+'">'+
+        flagIcons(dayStart)+
         '<span class="num">'+dnum+'</span><span class="band" style="background:'+dayBand(dayStart)+'"><span class="evd">'+dots+'</span></span></div>';
     }
     html+='<div class="month"><h3>'+MON_FULL[mm]+' '+yy+'</h3>'+
@@ -379,9 +382,12 @@ function buildCalendar(){
       '<div class="days">'+cells+'</div></div>';
   });
   $('#calGrid').innerHTML=html;
+  const flagged=Object.values(DAY_FLAGS);
   $('#calLegend').innerHTML=M.placeKeys.map(k=>
     '<span><i style="background:'+M.PLACES[k].c+'"></i>'+esc(M.PLACES[k].n)+'</span>').join('')+
-    '<span><i style="background:#4b5876"></i>faded number = nothing booked</span>';
+    '<span><i style="background:#4b5876"></i>faded number = nothing booked</span>'+
+    (flagged.some(f=>f.moves.length)?'<span>'+flagSvg('move')+'no transport booked</span>':'')+
+    (flagged.some(f=>f.stay)?'<span>'+flagSvg('stay')+'no bed booked that night</span>':'');
   calCurDay=null;
   if(wkDay!=null) wkDay=clamp(wkDay,tripFirstDay(),tripLastDay());
   updateCalendar(now);
@@ -393,11 +399,79 @@ function syncCalPast(){
   const wall=Date.now(), active=wall>=M.T0&&wall<=M.T1;
   $$('#calGrid .day.in, #wkDays .wk-day.in').forEach(d=>d.classList.toggle('past',active && daysAhead(+d.dataset.d0)<0));
 }
-function setCalMode(mode,noRender){
+/* fromUser: remember the choice, so the next visit (and the next trip) opens the same sub-view */
+function setCalMode(mode,noRender,fromUser){
   calMode=mode;
   $('#view-calendar').classList.toggle('week',mode==='week');
   hideTip();
-  if(mode==='week' && !noRender) renderWeek();
+  if(fromUser){ calModePref=mode; saveUiPrefs(); }
+  if(noRender) return;
+  if(mode==='week') renderWeek();
+  else scrollToCurMonth();
+}
+/* bring the month holding the playhead's day into view, unless it's already fully visible */
+function scrollToCurMonth(){
+  if(currentView!=='calendar' || calMode!=='month' || !calCurDay) return;
+  const wrap=$('#calWrap'), m=calCurDay.closest('.month');
+  const wr=wrap.getBoundingClientRect(), mr=m.getBoundingClientRect();
+  if(mr.top>=wr.top && mr.bottom<=wr.bottom) return;
+  wrap.scrollTop+=mr.top-wr.top-12;
+}
+function scrollToCurChapter(){
+  const c=calCurChap!=null && calCurChap>=0 ? $$('#chapters .chapter')[calCurChap] : null;
+  if(currentView!=='chapters' || !c) return;
+  const wrap=$('#chapWrap'), wr=wrap.getBoundingClientRect(), cr=c.getBoundingClientRect();
+  if(cr.top>=wr.top && cr.bottom<=wr.bottom) return;
+  wrap.scrollTop+=cr.top-wr.top-Math.max(12,(wr.height-cr.height)/2);
+}
+
+/* booking holes per calendar day: moves between towns with nothing booked (an unbooked "gap" leg, or a leg
+   that starts somewhere other than where the last one ended), and nights with no bed booked */
+let DAY_FLAGS={};
+const FLAG_ICON={
+  move:'M21.7 11.3l-9-9a1 1 0 0 0-1.4 0l-9 9a1 1 0 0 0 0 1.4l9 9a1 1 0 0 0 1.4 0l9-9a1 1 0 0 0 0-1.4zM14 14.5V12h-4v3H8v-4a1 1 0 0 1 1-1h5V7.5l3.5 3.5-3.5 3.5z',
+  stay:ICON.bed
+};
+function buildDayFlags(){
+  DAY_FLAGS={};
+  const at=d0=>DAY_FLAGS[d0]||(DAY_FLAGS[d0]={stay:null,moves:[]});
+  M.LEGS.forEach((l,i)=>{
+    const p=M.LEGS[i-1];
+    if(p && p.to!==l.from) at(calDayStart(l.t0)).moves.push({from:p.to,to:l.from});
+    if(l.mode==='gap') at(calDayStart(l.t0)).moves.push({from:l.from,to:l.to,id:l.id});
+  });
+  for(let d0=tripFirstDay();d0<=tripLastDay();d0+=DAY){
+    const s=nightGap(d0);
+    if(s) at(d0).stay=s;
+  }
+}
+/* the night after day d0, checked at 2am local time: a hole when you're settled away from home for more than a
+   quick connection (or out on an unbooked stretch) and no stay covers it — night trains and red-eyes don't count */
+function nightGap(d0){
+  const off=M.locationAt(clamp(d0+20*HOUR,M.T0,M.T1)).P.off;
+  const tn=Math.floor((d0+12*HOUR+off*MIN)/DAY)*DAY+DAY+2*HOUR-off*MIN;
+  if(tn<=M.T0 || tn>=M.T1) return null;
+  const L=M.locationAt(tn);
+  if(!L.seg) return null;
+  if(L.moving? L.leg.mode!=='gap' : (L.place===M.originKey || L.seg.t1-L.seg.t0<6*HOUR)) return null;
+  if(M.STAYS.some(s=>tn>=s.t0 && tn<s.t1)) return null;
+  return L.moving? {from:L.leg.from,to:L.leg.to} : {place:L.place};
+}
+function flagSvg(k){ return '<svg class="flag-ic '+k+'" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="'+FLAG_ICON[k]+'"/></svg>'; }
+function flagTexts(d0){
+  const f=DAY_FLAGS[d0], out=[];
+  if(!f) return out;
+  const n=k=>esc(M.PLACES[k].n);
+  f.moves.forEach(m=>out.push({k:'move', txt:'No transport booked · '+n(m.from)+' → '+n(m.to)}));
+  if(f.stay) out.push({k:'stay', txt:'No bed booked tonight · '+(f.stay.place? n(f.stay.place) : 'between '+n(f.stay.from)+' and '+n(f.stay.to))});
+  return out;
+}
+/* corner markers on a day square: transport top-left (it happens during the day), the missing bed top-right (that night) */
+function flagIcons(d0){
+  const f=DAY_FLAGS[d0];
+  if(!f) return '';
+  const t=flagTexts(d0).map(x=>x.txt).join('\n');
+  return '<span class="flags" title="'+t+'">'+(f.moves.length?flagSvg('move'):'<i></i>')+(f.stay?flagSvg('stay'):'')+'</span>';
 }
 
 /* the town(s) of one calendar day, left → right through the day, as hard
@@ -442,7 +516,7 @@ function updateCalendar(ts){
 }
 
 /* ---------- week view: the selected day's week up top, that day's items below ---------- */
-let calMode='month', wkDay=null, wkPlayDay=null, wkShownDay=null, wkActiveId=null, wkHold=false, wkDrag=null, wkSliding=false, wkSwiped=false;
+let calMode='month', wkDay=null, wkPlayDay=null, wkShownDay=null, wkActiveId=null, wkHold=false, wkSliding=false, wkSwiped=false;
 function tripFirstDay(){ return calDayStart(M.T0); }
 function tripLastDay(){ return calDayStart(M.T1-1); }
 function weekStartOf(d){ return d-new Date(d+M.calOff*MIN).getUTCDay()*DAY; }
@@ -470,7 +544,8 @@ function renderWeek(){
     const evs=M.ITEMS.filter(it=>it.t0>=d0&&it.t0<d0+DAY&&it.cls!=='gap');
     const isToday=Date.now()>=d0&&Date.now()<d0+DAY;
     cells+='<button type="button" class="wk-day in'+(d0===wkDay?' sel':'')+(isToday?' today':'')+(evs.length?'':' open')+'" data-d0="'+d0+'"'+
-      ' aria-label="'+fmt(d0+12*HOUR,M.calOff,'D')+'"'+(d0===wkDay?' aria-current="date"':'')+'>'+
+      ' aria-label="'+fmt(d0+12*HOUR,M.calOff,'D')+flagTexts(d0).map(x=>'. '+x.txt).join('')+'"'+(d0===wkDay?' aria-current="date"':'')+'>'+
+      flagIcons(d0)+
       '<span class="num">'+n+'</span>'+
       '<span class="band" style="background:'+dayBand(d0)+'"></span>'+
       '<span class="evd">'+evs.slice(0,5).map(()=>'<i></i>').join('')+'</span></button>';
@@ -484,8 +559,9 @@ function renderWeek(){
   $('#wkTitle').innerHTML='<b>'+fmt(wkDay+12*HOUR,M.calOff,'d')+'</b><span class="wk-where">'+esc(where)+'</span>'+
     '<span class="dnum">'+(n===0?'Today · ':'')+dayLabel(wkDay)+'</span>';
   const items=M.ITEMS.filter(it=>it.t0>=wkDay&&it.t0<wkDay+DAY);
-  $('#wkList').innerHTML=items.length? items.map(it=>cardHTML(it,wkDay)).join('')
-    : '<div class="emptylist">Nothing booked this day.</div>';
+  const flags=flagTexts(wkDay);
+  $('#wkList').innerHTML=(flags.length?'<div class="wk-flags'+(n<0?' past':'')+'">'+flags.map(f=>'<div class="wk-flag">'+flagSvg(f.k)+'<span>'+f.txt+'</span></div>').join('')+'</div>':'')+
+    (items.length? items.map(it=>cardHTML(it,wkDay)).join('') : '<div class="emptylist">Nothing booked this day.</div>');
   if(wkDay!==wkShownDay){ $('#wkList').scrollTop=0; wkShownDay=wkDay; }
   wkActiveId=null;
   syncListStatus();
@@ -513,10 +589,10 @@ function stepWeek(dir){
   selectCalDay(wkDay+dir*7*DAY);
   return true;
 }
-/* slide the week strip out towards the swipe, swap in the neighbouring week, and slide that in from the far side */
-function slideWeek(dir){
-  const el=$('#wkDays');
-  if(!hasWeek(dir)){ el.style.transform=''; el.style.opacity=''; return; }
+function hasDay(dir){ return dir<0 ? wkDay>tripFirstDay() : wkDay<tripLastDay(); }
+/* slide el out towards the swipe, step(), and slide the new content in from the far side */
+function slideAcross(el,dir,can,step){
+  if(!can){ el.style.transform=''; el.style.opacity=''; return; }
   const w=el.offsetWidth;
   wkSliding=true;
   el.classList.remove('dragging');
@@ -524,7 +600,7 @@ function slideWeek(dir){
   el.style.opacity='0';
   setTimeout(()=>{
     wkSliding=false;
-    stepWeek(dir);
+    step();
     el.classList.add('dragging');
     el.style.transform='translateX('+(dir*w*.35)+'px)';
     el.style.opacity='0';
@@ -532,6 +608,45 @@ function slideWeek(dir){
     el.classList.remove('dragging');
     el.style.transform=''; el.style.opacity='';
   },160);
+}
+function slideWeek(dir){ slideAcross($('#wkDays'),dir,hasWeek(dir),()=>stepWeek(dir)); }
+function slideDay(dir){ slideAcross($('#wkList'),dir,hasDay(dir),()=>selectCalDay(wkDay+dir*DAY)); }
+/* drag el sideways inside area; past a distance or a flick, slide(dir) moves on (dir 1 = next).
+   Vertical drags are left to the browser, so a list inside can still scroll. */
+function bindSwipe(area,el,has,slide,touchOnly){
+  let d=null;
+  area.addEventListener('pointerdown',e=>{
+    if(e.button || wkSliding || (touchOnly && e.pointerType==='mouse')) return;
+    d={id:e.pointerId, x:e.clientX, y:e.clientY, d:0, v:0, last:0, lastT:e.timeStamp, axis:false};
+  });
+  area.addEventListener('pointermove',e=>{
+    if(!d || e.pointerId!==d.id) return;
+    const dx=e.clientX-d.x, ax=Math.abs(dx), ay=Math.abs(e.clientY-d.y);
+    if(!d.axis){
+      if(ax>10 && ax>ay*1.2){ d.axis=true; d.prev=has(-1); d.next=has(1); el.classList.add('dragging'); area.setPointerCapture(e.pointerId); }
+      else { if(ay>10) d=null; return; }
+    }
+    const dt=e.timeStamp-d.lastT;
+    if(dt>0) d.v=(dx-d.last)/dt;
+    d.last=dx; d.lastT=e.timeStamp; d.d=dx;
+    const open=dx<0? d.next : d.prev;
+    el.style.transform='translateX('+(open? dx : dx*.25)+'px)';
+    if(open) el.style.opacity=String(1-Math.min(.6,ax/el.offsetWidth));
+  });
+  const end=e=>{
+    if(!d || e.pointerId!==d.id) return;
+    const s=d; d=null;
+    if(!s.axis) return;
+    el.classList.remove('dragging');
+    wkSwiped=true; setTimeout(()=>{ wkSwiped=false; },0);
+    const dir=s.d<0? 1 : -1;
+    const go=e.type==='pointerup' && (dir>0? s.next : s.prev) &&
+      (Math.abs(s.d)>Math.min(80,el.offsetWidth*.2) || (Math.abs(s.v)>.35 && Math.abs(s.d)>24 && Math.sign(s.v)===-dir));
+    if(go) slide(dir);
+    else { el.style.transform=''; el.style.opacity=''; }
+  };
+  area.addEventListener('pointerup',end);
+  area.addEventListener('pointercancel',end);
 }
 
 /* mark chapters as past / current */
@@ -955,7 +1070,7 @@ function loadTrip(cfg,opts){
   liveDay=calDayStart(Date.now());
   if(!keep){
     wkDay=null; wkPlayDay=null;
-    setCalMode(M.TOTAL_DAYS<=7?'week':'month',true);
+    setCalMode(calModePref||(M.TOTAL_DAYS<=7?'week':'month'),true);
   }
   buildHeader();
   buildMapLayers();
@@ -976,6 +1091,7 @@ function loadTrip(cfg,opts){
   jGeom=null;
   setView(currentView, true);
   render(!keep);
+  if(!keep){ scrollToCurMonth(); scrollToCurChapter(); }
 }
 function populateTripSel(value){
   const sel=$('#tripSel');
@@ -1125,10 +1241,10 @@ function bindUI(){
   $('#calGrid').addEventListener('click',e=>{
     const d=e.target.closest('.day.in'); if(!d) return;
     wkDay=null;
-    setCalMode('week',true);
+    setCalMode('week',true,true);
     selectCalDay(+d.dataset.d0);
   });
-  $('#wkBack').addEventListener('click',()=>setCalMode('month'));
+  $('#wkBack').addEventListener('click',()=>setCalMode('month',false,true));
   $('#wkPrev').addEventListener('click',()=>{ if(!wkSliding) slideWeek(-1); });
   $('#wkNext').addEventListener('click',()=>{ if(!wkSliding) slideWeek(1); });
   $('#wkDays').addEventListener('click',e=>{
@@ -1142,47 +1258,15 @@ function bindUI(){
     focusItem(c.dataset.id);
   };
   $('#wkList').addEventListener('click',e=>{
-    const c=e.target.closest('.card'); if(c) openFromWeek(c);
+    const c=e.target.closest('.card'); if(c && !wkSwiped) openFromWeek(c);
   });
   $('#wkList').addEventListener('keydown',e=>{
     const c=e.target.closest('.card');
     if(c && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); openFromWeek(c); }
   });
-  /* swipe the week strip sideways for the previous / next week */
-  const strip=$('#wkStrip'), wkEl=$('#wkDays');
-  strip.addEventListener('pointerdown',e=>{
-    if(e.button || wkSliding) return;
-    wkDrag={id:e.pointerId, x:e.clientX, y:e.clientY, d:0, v:0, last:0, lastT:e.timeStamp, axis:false};
-  });
-  strip.addEventListener('pointermove',e=>{
-    const d=wkDrag;
-    if(!d || e.pointerId!==d.id) return;
-    const dx=e.clientX-d.x, ax=Math.abs(dx), ay=Math.abs(e.clientY-d.y);
-    if(!d.axis){
-      if(ax>10 && ax>ay*1.2){ d.axis=true; d.prev=hasWeek(-1); d.next=hasWeek(1); wkEl.classList.add('dragging'); strip.setPointerCapture(e.pointerId); }
-      else { if(ay>10) wkDrag=null; return; }
-    }
-    const dt=e.timeStamp-d.lastT;
-    if(dt>0) d.v=(dx-d.last)/dt;
-    d.last=dx; d.lastT=e.timeStamp; d.d=dx;
-    const open=dx<0? d.next : d.prev;
-    wkEl.style.transform='translateX('+(open? dx : dx*.25)+'px)';
-    if(open) wkEl.style.opacity=String(1-Math.min(.6,ax/wkEl.offsetWidth));
-  });
-  const endWkDrag=e=>{
-    if(!wkDrag || e.pointerId!==wkDrag.id) return;
-    const d=wkDrag; wkDrag=null;
-    if(!d.axis) return;
-    wkEl.classList.remove('dragging');
-    wkSwiped=true; setTimeout(()=>{ wkSwiped=false; },0);
-    const dir=d.d<0? 1 : -1;
-    const go=e.type==='pointerup' && (dir>0? d.next : d.prev) &&
-      (Math.abs(d.d)>Math.min(80,wkEl.offsetWidth*.2) || (Math.abs(d.v)>.35 && Math.abs(d.d)>24 && Math.sign(d.v)===-dir));
-    if(go) slideWeek(dir);
-    else { wkEl.style.transform=''; wkEl.style.opacity=''; }
-  };
-  strip.addEventListener('pointerup',endWkDrag);
-  strip.addEventListener('pointercancel',endWkDrag);
+  /* swipe the week strip sideways for the previous / next week, and the day's items for the previous / next day */
+  bindSwipe($('#wkStrip'),$('#wkDays'),hasWeek,slideWeek);
+  bindSwipe($('#wkList'),$('#wkList'),hasDay,slideDay,true);
   $('#calGrid').addEventListener('pointerover',e=>{
     const d=e.target.closest('.day.in'); if(!d) return;
     const t=+d.dataset.t, L=M.locationAt(clamp(t,M.T0,M.T1));
@@ -1191,7 +1275,8 @@ function bindUI(){
     showTip(e,'<b>'+fmt(t,M.calOff,'D')+'</b><span class="m">'+
       (L.moving?'travelling '+esc(M.PLACES[L.leg.from].n)+' → '+esc(M.PLACES[L.leg.to].n):'in '+esc(L.P.n)+(L.P.r?', '+esc(L.P.r):''))+'</span>'+
       (evs.length?'<div style="margin-top:5px">'+evs.map(it=>'· '+fmt(it.t0,it.off,'t')+' '+esc(it.title)).join('<br>')+'</div>'
-                 :'<div class="m" style="margin-top:5px">nothing scheduled</div>'));
+                 :'<div class="m" style="margin-top:5px">nothing scheduled</div>')+
+      flagTexts(dayStart).map(f=>'<div class="tip-flag">'+flagSvg(f.k)+f.txt+'</div>').join(''));
   });
   $('#calGrid').addEventListener('pointerout',hideTip);
   $('#chapters').addEventListener('click',e=>{
@@ -1331,6 +1416,8 @@ function setView(v, silent){
   $('.app').classList.toggle('list-view',v==='list');
   if(v==='journey') drawJourney();
   if(v==='map'){ if(mapNeedsFit) applySavedMapZoom(); else applyView(); }
+  if(v==='calendar') scrollToCurMonth();
+  if(v==='chapters') scrollToCurChapter();
   if((v==='list'||wasList) && M) syncList(now,true);
   if(!silent) saveUiPrefs();
 }

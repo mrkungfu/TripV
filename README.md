@@ -66,10 +66,25 @@ normalize it to JSON.
 
 ## Views and small screens
 
-The tabs switch between **Map**, **Journey** and **Calendar** (keys 1–3), plus **List**
-(key 4) on narrow screens; the choice is remembered. On wide screens the itinerary always
+The tabs switch between **Map**, **Journey**, **Calendar** and **Chapters** (keys 1–4), plus **List**
+(key 5) on narrow screens; the choice is remembered. On wide screens the itinerary always
 sits beside the current view. Each filter chip shows how many
 bookings it covers within the current search (a stay counts once, not once for check-in and again for check-out).
+
+The Calendar has a month view and a week view (tap a day to open its week); the last one you
+picked is remembered. Opening the month view scrolls to the month of the day being shown, and
+opening Chapters scrolls to the current chapter. In the week view, swipe the day strip sideways
+for the previous / next week, or swipe the day's items for the previous / next day.
+
+Both calendar views flag holes in the bookings. A marker in a day's top-left corner means you
+move between towns that day with nothing booked: an unbooked `gap` leg, or a leg that starts
+somewhere other than where the previous one ended. A marker in the top-right corner means no
+stay covers that night (checked at 2 am local time). Nights at the trip's starting place, on
+an overnight flight / train / bus, or during a stopover under 6 hours are not flagged. The week
+view also lists the day's flags above its items.
+
+On a travel card the clock change (e.g. "+16 h") sits in the middle column, level with the
+date and UTC offset shown under each end.
 
 On narrow screens (≤ 940 px) the selected view fills the space between the header and the
 footer. The header keeps only the day count next to the trip name; tapping it opens a card with
