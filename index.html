@@ -166,6 +166,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .day.in.past:hover{opacity:.8}
 .day.in.past.cur{opacity:.85}
 .calnote{margin-top:16px;font-size:11.5px;color:var(--txt-faint);max-width:760px;line-height:1.6}
+/* booking holes: missing transport (top-left) and missing bed for the night (top-right) */
+.flag-ic{width:9px;height:9px;flex:none;color:var(--warn)}
+.flags{position:absolute;top:2px;left:2px;right:2px;display:flex;justify-content:space-between;pointer-events:none}
+.flags i{width:9px}
+.callegend .flag-ic{width:12px;height:12px}
+.tip-flag{display:flex;align-items:center;gap:6px;margin-top:5px;color:#fde8b8}
+.tip-flag .flag-ic{width:11px;height:11px}
 
 /* calendar: week view */
 #weekWrap{position:absolute;inset:0;display:none;flex-direction:column}
@@ -182,7 +189,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .wk-dow span{text-align:center;font-size:10px;color:var(--txt-faint);letter-spacing:.06em;padding-bottom:4px}
 .wk-days{transition:transform .16s ease,opacity .16s ease}
 .wk-days.dragging{transition:none}
-.wk-day{display:flex;flex-direction:column;align-items:center;gap:5px;padding:2px 0 4px;border-radius:10px;color:#34405c;min-width:0}
+.wk-day{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:2px 0 4px;border-radius:10px;color:#34405c;min-width:0}
+.wk-day .flags{top:0;left:50%;right:auto;width:min(100%,48px);transform:translateX(-50%)}
+.wk-day .flag-ic,.wk-day .flags i{width:11px;height:11px}
 .wk-day .num{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;transition:background-color .15s,color .15s}
 .wk-day .band{width:70%;max-width:34px;height:4px;border-radius:3px}
@@ -205,7 +214,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .wk-title.past b{color:#5d6886}
 .wk-title.today b{color:var(--flight)}
 .wk-title.today .dnum{color:var(--flight);opacity:.85}
-.wk-list{padding-top:4px}
+.wk-list{padding-top:4px;touch-action:pan-y;transition:transform .16s ease,opacity .16s ease}
+.wk-list.dragging{transition:none}
+.wk-flags{display:flex;flex-direction:column;gap:4px;margin:2px 0 6px;padding:8px 11px;border-radius:10px;
+  background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.24);color:#fde8b8;font-size:12px;line-height:1.4}
+.wk-flags.past{opacity:.55}
+.wk-flag{display:flex;align-items:center;gap:8px}
+.wk-flag .flag-ic{width:13px;height:13px}
 
 /* chapters */
 #chapWrap{position:absolute;inset:0;overflow:auto;padding:16px 18px 22px}
@@ -721,7 +736,9 @@ body.sheet-open{overflow:hidden}
             Each square is one day. The strip along its bottom is coloured by the town you're in, and on travel days it
             splits left to right at about the hour you move. Dots count the scheduled items on that day. A faded day number means
             nothing is booked that day, one of the open stretches of the trip. The raised square is the day the page is
-            showing, and today's day number is amber. Click any day to open its week and move the whole page to it.
+            showing, and today's day number is amber. A marker in the top-left corner means you move between towns that day
+            with no transport booked; one in the top-right corner means nowhere to sleep is booked that night.
+            Click any day to open its week and move the whole page to it.
           </div>
         </div>
         <div id="weekWrap">
