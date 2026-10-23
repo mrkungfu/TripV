@@ -1081,7 +1081,7 @@ function loadTrip(cfg,opts){
   closeCard();
   stopPlay();
   if(!keep){
-    query=''; $('#q').value='';
+    query=''; $('#q').value=''; setSearchOpen(false);
     filter='all'; $$('#filters button').forEach(b=>b.classList.toggle('on',b.dataset.f==='all'));
   }
 
@@ -1282,6 +1282,7 @@ function bindUI(){
     const c=e.target.closest('.card');
     if(c && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); openFromWeek(c); }
   });
+  $('#wkAdd').addEventListener('click',()=>{ stopPlay(); openNewItem('',cellIdx(wkDay)); });
   /* swipe the week strip sideways for the previous / next week, and the day's items for the previous / next day */
   bindSwipe($('#wkStrip'),$('#wkDays'),hasWeek,slideWeek);
   bindSwipe($('#wkList'),$('#wkList'),hasDay,slideDay,true);
@@ -1321,6 +1322,10 @@ function bindUI(){
   });
   $('#q').addEventListener('input',e=>{ query=e.target.value.trim().toLowerCase(); renderList(); });
   $('#addItem').addEventListener('click',()=>{ stopPlay(); openNewItem($('#q').value.trim()); });
+  $('#searchBtn').addEventListener('click',()=>setSearchOpen(!$('.side').classList.contains('searching')));
+  $('#q').addEventListener('keydown',e=>{
+    if(e.key==='Escape' && $('.side').classList.contains('searching')){ e.preventDefault(); setSearchOpen(false); $('#searchBtn').focus(); }
+  });
   $('#list').addEventListener('scroll',()=>{
     if(programScroll) return;
     userScrolled=true; clearTimeout(scrollTimer);
@@ -1394,6 +1399,7 @@ function bindUI(){
     if(narrow.matches){ $('.transport').prepend(readout); $('.transport').prepend(tabs); }
     else { $('.topbar').appendChild(tabs); $('.topbar').appendChild(readout); }
     if(!M) return;
+    if(narrow.matches && !hasPlayer(currentView)) stopPlay();
     if(currentView==='list' && !narrow.matches) setView('map', true);
     else syncList(now,true);
   };
@@ -1424,6 +1430,19 @@ function bindUI(){
   });
 }
 
+/* on narrow screens these views drop the play / step / speed controls and keep just the slider and NOW */
+function hasPlayer(v){ return v==='map' || v==='journey'; }
+/* the narrow list view's floating search: opening shows the field, closing clears the search */
+function setSearchOpen(open){
+  const btn=$('#searchBtn'), q=$('#q');
+  $('.side').classList.toggle('searching',open);
+  btn.setAttribute('aria-expanded',String(open));
+  btn.title=open?'Clear and close search':'Search';
+  btn.setAttribute('aria-label',btn.title);
+  if(open){ q.focus(); return; }
+  if(q.value||query){ q.value=''; query=''; if(M) renderList(); }
+  if(document.activeElement===q) q.blur();
+}
 function setView(v, silent){
   // List is narrow-only: wide screens always show the itinerary beside the other views
   if(v==='list' && !narrow.matches){ v='map'; silent=true; }
@@ -1432,6 +1451,8 @@ function setView(v, silent){
   $$('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   const wasList=$('.app').classList.contains('list-view');
   $('.app').classList.toggle('list-view',v==='list');
+  $('.app').classList.toggle('no-player',!hasPlayer(v));
+  if(narrow.matches && !hasPlayer(v)) stopPlay();
   if(v==='journey') drawJourney();
   if(v==='map'){ if(mapNeedsFit) applySavedMapZoom(); else applyView(); }
   if(v==='calendar') scrollToCurMonth();
