@@ -263,15 +263,32 @@ function placeOrder(){
   M.placeKeys.forEach(k=>{ if(!seen.includes(k)) seen.push(k); });
   return seen;
 }
+let measureCtx=null;
+function textWidth(str,font){
+  measureCtx=measureCtx||document.createElement('canvas').getContext('2d');
+  measureCtx.font=font+' '+getComputedStyle(document.body).fontFamily;
+  return measureCtx.measureText(str).width;
+}
+const J_COUNTRY_GAP=.6;   // extra row-heights of space before each country change
 function drawJourney(){
   const box=jSvg.getBoundingClientRect();
   const W=Math.max(560,box.width), H=Math.max(360,box.height);
-  const m={l:132,r:22,t:94,b:46};
   const order=placeOrder();
+  // A country caption sits above the first city of each run of same-country rows.
+  const newCountry=order.map((k,i)=>i===0||M.PLACES[k].cc!==M.PLACES[order[i-1]].cc);
+  const country=k=>(M.PLACES[k].cc||'').toUpperCase();
+  let labelW=0;
+  order.forEach((k,i)=>{
+    labelW=Math.max(labelW,textWidth(M.PLACES[k].n,'600 11px'));
+    if(newCountry[i]&&country(k)) labelW=Math.max(labelW,textWidth(country(k),'600 8.5px')+country(k).length*.85);
+  });
+  const m={l:Math.round(clamp(labelW+22,64,220)),r:22,t:94,b:46};
   const iw=W-m.l-m.r, ih=H-m.t-m.b;
-  const rowH=ih/Math.max(1,order.length-1);
+  const slot=[]; let acc=0;
+  order.forEach((k,i)=>{ if(i>0&&newCountry[i]) acc+=J_COUNTRY_GAP; slot.push(acc); acc++; });
+  const rowH=ih/Math.max(1,acc-1);
   const X=t=>m.l+(t-M.T0)/M.TRIP_MS*iw;
-  const Y=k=>m.t+order.indexOf(k)*rowH;
+  const Y=k=>m.t+slot[order.indexOf(k)]*rowH;
   jGeom={X,Y,W,H,m,iw};
   const calShift=M.calOff*MIN;
 
@@ -293,11 +310,17 @@ function drawJourney(){
     d=new Date(d.getTime()+DAY);
   }
   // rows
-  order.forEach(k=>{
+  order.forEach((k,i)=>{
     const y=Y(k), P=M.PLACES[k];
+    if(newCountry[i]){
+      if(i>0){
+        const yd=(Y(order[i-1])+y)/2;
+        s+='<path class="j-country-div" d="M10 '+yd.toFixed(1)+'H'+(W-m.r)+'"/>';
+      }
+      if(country(k)) s+='<text class="j-country" x="'+(m.l-10)+'" y="'+(y-Math.min(11,rowH*.5+3)).toFixed(1)+'" text-anchor="end">'+esc(country(k))+'</text>';
+    }
     s+='<path class="j-grid" d="M'+m.l+' '+y.toFixed(1)+'H'+(W-m.r)+'" opacity=".55"/>';
-    s+='<text class="j-place" x="'+(m.l-10)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end">'+esc(P.n)+
-       ' <tspan class="cc">'+esc(P.cc)+'</tspan></text>';
+    s+='<text class="j-place" x="'+(m.l-10)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end">'+esc(P.n)+'</text>';
     s+='<circle cx="'+(m.l-4)+'" cy="'+y.toFixed(1)+'" r="2.6" fill="'+P.c+'"/>';
   });
   // lodging bands
