@@ -269,10 +269,10 @@ function textWidth(str,font){
   measureCtx.font=font+' '+getComputedStyle(document.body).fontFamily;
   return measureCtx.measureText(str).width;
 }
-const J_COUNTRY_GAP=.6;   // extra row-heights of space before each country change
+const J_MIN_ROW=20, J_CAP_GAP=14;   // px; the caption gap is extra space before each country change
 function drawJourney(){
+  jSvg.style.height='';
   const box=jSvg.getBoundingClientRect();
-  const W=Math.max(560,box.width), H=Math.max(360,box.height);
   const order=placeOrder();
   // A country caption sits above the first city of each run of same-country rows.
   const newCountry=order.map((k,i)=>i===0||M.PLACES[k].cc!==M.PLACES[order[i-1]].cc);
@@ -283,17 +283,33 @@ function drawJourney(){
     if(newCountry[i]&&country(k)) labelW=Math.max(labelW,textWidth(country(k),'600 8.5px')+country(k).length*.85);
   });
   const m={l:Math.round(clamp(labelW+22,64,220)),r:22,t:94,b:46};
+  const nGaps=newCountry.filter((v,i)=>v&&i>0).length;
+  // Drawn 1:1 with the screen so phone text isn't scaled down; too many rows to fit makes the view scroll.
+  const W=Math.max(320,box.width), scale=box.width?W/box.width:1, boxH=box.height*scale;
+  const H=Math.max(360,boxH,m.t+m.b+(order.length-1)*J_MIN_ROW+nGaps*J_CAP_GAP);
+  if(box.width&&H>boxH+1) jSvg.style.height=Math.ceil(H/scale)+'px';
   const iw=W-m.l-m.r, ih=H-m.t-m.b;
-  const slot=[]; let acc=0;
-  order.forEach((k,i)=>{ if(i>0&&newCountry[i]) acc+=J_COUNTRY_GAP; slot.push(acc); acc++; });
-  const rowH=ih/Math.max(1,acc-1);
+  const rowH=(ih-nGaps*J_CAP_GAP)/Math.max(1,order.length-1);
+  const rowY=[]; let gaps=0;
+  order.forEach((k,i)=>{ if(i>0&&newCountry[i]) gaps++; rowY.push(m.t+i*rowH+gaps*J_CAP_GAP); });
   const X=t=>m.l+(t-M.T0)/M.TRIP_MS*iw;
-  const Y=k=>m.t+slot[order.indexOf(k)]*rowH;
+  const Y=k=>rowY[order.indexOf(k)];
   jGeom={X,Y,W,H,m,iw};
   const calShift=M.calOff*MIN;
 
   let s='';
+  // alternate country groups get a faint band; each band starts just above its caption
+  let band=0, bandTop=0;
+  order.forEach((k,i)=>{
+    if(i>0&&newCountry[i]){
+      const top=rowY[i]-Math.max(20,(rowY[i]-rowY[i-1])/2);
+      if(band%2) s+='<rect class="j-country-band" x="0" y="'+bandTop.toFixed(1)+'" width="'+(W-m.r)+'" height="'+(top-bandTop).toFixed(1)+'"/>';
+      band++; bandTop=top;
+    }
+  });
+  if(band%2) s+='<rect class="j-country-band" x="0" y="'+bandTop.toFixed(1)+'" width="'+(W-m.r)+'" height="'+(H-m.b+12-bandTop).toFixed(1)+'"/>';
   // month + week grid, derived from the trip window (was hardcoded to Jul–Oct 2026)
+  const dayLbls=[];
   const start=new Date(M.T0+calShift);
   let d=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth(),1));
   while(d.getTime()-calShift<M.T1+DAY){
@@ -304,22 +320,22 @@ function drawJourney(){
         s+='<path class="j-grid'+(isMonth?' strong':'')+'" d="M'+X(t).toFixed(1)+' '+m.t+'V'+(H-m.b)+'"/>';
       }
       if(isMonth) s+='<text class="j-lbl month" x="'+(X(t)+7).toFixed(1)+'" y="'+(m.t-32)+'">'+MON[d.getUTCMonth()].toUpperCase()+'</text>';
-      if(isWeek&&!isMonth) s+='<text class="j-lbl" x="'+(X(t)).toFixed(1)+'" y="'+(m.t-12)+'" text-anchor="middle">'+d.getUTCDate()+'</text>';
-      if(isMonth) s+='<text class="j-lbl" x="'+(X(t)).toFixed(1)+'" y="'+(m.t-12)+'" text-anchor="middle">1</text>';
+      if(isMonth||isWeek) dayLbls.push({x:X(t),txt:d.getUTCDate(),month:isMonth});
     }
     d=new Date(d.getTime()+DAY);
   }
+  // day numbers: month starts win, and any label that would crowd its neighbour is dropped
+  const keptLbls=[];
+  dayLbls.filter(a=>a.month||!dayLbls.some(b=>b.month&&Math.abs(b.x-a.x)<20)).forEach(a=>{
+    if(!keptLbls.length||a.x-keptLbls[keptLbls.length-1].x>=20) keptLbls.push(a);
+  });
+  keptLbls.forEach(a=>{ s+='<text class="j-lbl" x="'+a.x.toFixed(1)+'" y="'+(m.t-12)+'" text-anchor="middle">'+a.txt+'</text>'; });
   // rows
   order.forEach((k,i)=>{
     const y=Y(k), P=M.PLACES[k];
-    if(newCountry[i]){
-      if(i>0){
-        const yd=(Y(order[i-1])+y)/2;
-        s+='<path class="j-country-div" d="M10 '+yd.toFixed(1)+'H'+(W-m.r)+'"/>';
-      }
-      if(country(k)) s+='<text class="j-country" x="'+(m.l-10)+'" y="'+(y-Math.min(11,rowH*.5+3)).toFixed(1)+'" text-anchor="end">'+esc(country(k))+'</text>';
-    }
-    s+='<path class="j-grid" d="M'+m.l+' '+y.toFixed(1)+'H'+(W-m.r)+'" opacity=".55"/>';
+    if(newCountry[i]&&country(k))
+      s+='<text class="j-country" x="'+(m.l-10)+'" y="'+(y-11).toFixed(1)+'" text-anchor="end">'+esc(country(k))+'</text>';
+    s+='<path class="j-grid" d="M'+m.l+' '+y.toFixed(1)+'H'+(W-m.r)+'" opacity=".35"/>';
     s+='<text class="j-place" x="'+(m.l-10)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end">'+esc(P.n)+'</text>';
     s+='<circle cx="'+(m.l-4)+'" cy="'+y.toFixed(1)+'" r="2.6" fill="'+P.c+'"/>';
   });
