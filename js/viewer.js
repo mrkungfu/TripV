@@ -282,10 +282,13 @@ function drawJourney(){
     labelW=Math.max(labelW,textWidth(M.PLACES[k].n,'600 11px'));
     if(newCountry[i]&&country(k)) labelW=Math.max(labelW,textWidth(country(k),'600 8.5px')+country(k).length*.85);
   });
-  const m={l:Math.round(clamp(labelW+22,64,220)),r:22,t:94,b:46};
-  const nGaps=newCountry.filter((v,i)=>v&&i>0).length;
   // Drawn 1:1 with the screen so phone text isn't scaled down; too many rows to fit makes the view scroll.
   const W=Math.max(320,box.width), scale=box.width?W/box.width:1, boxH=box.height*scale;
+  // the date axis sits just under the floating sort control
+  const vh=$('#view-journey .viewhead');
+  const vhBottom=vh&&vh.offsetHeight?(vh.offsetTop+vh.offsetHeight)*scale:42;
+  const m={l:Math.round(clamp(labelW+22,64,220)),r:22,t:Math.round(vhBottom+28),b:14};
+  const nGaps=newCountry.filter((v,i)=>v&&i>0).length;
   const H=Math.max(360,boxH,m.t+m.b+(order.length-1)*J_MIN_ROW+nGaps*J_CAP_GAP);
   if(box.width&&H>boxH+1) jSvg.style.height=Math.ceil(H/scale)+'px';
   const iw=W-m.l-m.r, ih=H-m.t-m.b;
@@ -307,9 +310,11 @@ function drawJourney(){
       band++; bandTop=top;
     }
   });
-  if(band%2) s+='<rect class="j-country-band" x="0" y="'+bandTop.toFixed(1)+'" width="'+(W-m.r)+'" height="'+(H-m.b+12-bandTop).toFixed(1)+'"/>';
+  if(band%2) s+='<rect class="j-country-band" x="0" y="'+bandTop.toFixed(1)+'" width="'+(W-m.r)+'" height="'+(H-bandTop).toFixed(1)+'"/>';
   // month + week grid, derived from the trip window (was hardcoded to Jul–Oct 2026)
-  const dayLbls=[];
+  // One axis row: month names start at their 1st (or at the left edge for the opening month),
+  // Monday dates fill in wherever they don't crowd a month name or each other.
+  const months=[], weeks=[];
   const start=new Date(M.T0+calShift);
   let d=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth(),1));
   while(d.getTime()-calShift<M.T1+DAY){
@@ -319,17 +324,20 @@ function drawJourney(){
       if(isMonth||isWeek){
         s+='<path class="j-grid'+(isMonth?' strong':'')+'" d="M'+X(t).toFixed(1)+' '+m.t+'V'+(H-m.b)+'"/>';
       }
-      if(isMonth) s+='<text class="j-lbl month" x="'+(X(t)+7).toFixed(1)+'" y="'+(m.t-32)+'">'+MON[d.getUTCMonth()].toUpperCase()+'</text>';
-      if(isMonth||isWeek) dayLbls.push({x:X(t),txt:d.getUTCDate(),month:isMonth});
-    }
+      if(isMonth) months.push({x:Math.max(m.l,X(t)),txt:MON[d.getUTCMonth()].toUpperCase()});
+      else if(isWeek) weeks.push({x:X(t),txt:d.getUTCDate()});
+    } else if(t<M.T0-DAY && d.getUTCDate()===1) months.push({x:m.l,txt:MON[d.getUTCMonth()].toUpperCase()});
     d=new Date(d.getTime()+DAY);
   }
-  // day numbers: month starts win, and any label that would crowd its neighbour is dropped
-  const keptLbls=[];
-  dayLbls.filter(a=>a.month||!dayLbls.some(b=>b.month&&Math.abs(b.x-a.x)<20)).forEach(a=>{
-    if(!keptLbls.length||a.x-keptLbls[keptLbls.length-1].x>=20) keptLbls.push(a);
+  const ay=m.t-11;
+  months.forEach(a=>{ a.end=a.x+4+textWidth(a.txt,'600 11px')+a.txt.length*.66; });
+  let lastX=-1e9;
+  weeks.forEach(({x,txt})=>{
+    if(x-lastX<20 || months.some(a=>x+9>a.x && x-9<a.end+4)) return;
+    s+='<text class="j-lbl" x="'+x.toFixed(1)+'" y="'+ay+'" text-anchor="middle">'+txt+'</text>';
+    lastX=x;
   });
-  keptLbls.forEach(a=>{ s+='<text class="j-lbl" x="'+a.x.toFixed(1)+'" y="'+(m.t-12)+'" text-anchor="middle">'+a.txt+'</text>'; });
+  months.forEach(a=>{ s+='<text class="j-lbl month" x="'+(a.x+4).toFixed(1)+'" y="'+ay+'">'+a.txt+'</text>'; });
   // rows
   order.forEach((k,i)=>{
     const y=Y(k), P=M.PLACES[k];
