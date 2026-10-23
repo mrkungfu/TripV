@@ -214,7 +214,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .wk-title.past b{color:#5d6886}
 .wk-title.today b{color:var(--flight)}
 .wk-title.today .dnum{color:var(--flight);opacity:.85}
-.wk-list{padding-top:4px;touch-action:pan-y;transition:transform .16s ease,opacity .16s ease}
+.wk-list{padding-top:4px;padding-bottom:80px;touch-action:pan-y;transition:transform .16s ease,opacity .16s ease}
+#wkAdd{position:absolute;right:14px;bottom:14px;z-index:5}
 .wk-list.dragging{transition:none}
 .wk-flags{display:flex;flex-direction:column;gap:4px;margin:2px 0 6px;padding:8px 11px;border-radius:10px;
   background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.24);color:#fde8b8;font-size:12px;line-height:1.4}
@@ -265,6 +266,17 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 }
 .addbtn:hover,.addbtn:focus-visible{color:#fff;border-color:#3a4b78;background:rgba(255,255,255,.09);outline:none}
 .addbtn svg{width:16px;height:16px}
+.searchbtn{display:none}
+.searchbtn .ic-x,.side.searching .searchbtn .ic-search{display:none}
+.side.searching .searchbtn .ic-x{display:block}
+/* round controls floating over a list's lower-right corner */
+.fab{
+  width:48px;height:48px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  color:var(--txt);background:rgba(22,33,58,.9);border:1px solid var(--line);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.45)
+}
+.fab:hover,.fab:focus-visible{background:rgba(34,48,80,.95);border-color:#3a4b78;outline:none}
+.fab svg{width:20px;height:20px}
 .search{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);border-radius:9px;padding:6px 10px}
 .search input{flex:1;background:none;border:none;outline:none;color:var(--txt);font:inherit;font-size:13px}
 .search input::placeholder{color:var(--txt-faint)}
@@ -615,13 +627,39 @@ body.sheet-open{overflow:hidden}
   .transport .tabs{justify-self:stretch;align-self:auto}
   .transport .tabs button{flex:1 1 0;justify-content:center;padding:6px 4px;min-width:0}
   .playgrp{justify-content:center}
-  /* list view: no player, just the slider with NOW beside it */
-  .app.list-view .transport{grid-template-columns:minmax(0,1fr) auto;column-gap:10px}
-  .app.list-view .transport .tabs,.app.list-view .transport .readout{grid-column:1/-1}
-  .app.list-view .playgrp{display:contents}
-  .app.list-view .playgrp>:not(#toNow){display:none}
-  .app.list-view .scrubwrap{grid-column:1;grid-row:3}
-  .app.list-view #toNow{grid-column:2;grid-row:3;align-self:end;margin-bottom:-4px}
+  /* list, calendar and chapters: no player, just the slider with NOW beside it */
+  .app.no-player .transport{grid-template-columns:minmax(0,1fr) auto;column-gap:10px}
+  .app.no-player .transport .tabs,.app.no-player .transport .readout{grid-column:1/-1}
+  .app.no-player .playgrp{display:contents}
+  .app.no-player .playgrp>:not(#toNow){display:none}
+  .app.no-player .scrubwrap{grid-column:1;grid-row:3}
+  .app.no-player #toNow{grid-column:2;grid-row:3;align-self:end;margin-bottom:-4px}
+  /* list view: add sits above search over the list's lower-right corner; search opens its field to the left */
+  .side{position:relative}
+  .app.list-view .list{padding-bottom:132px}
+  .app.list-view .searchrow{
+    position:absolute;left:14px;right:14px;bottom:14px;z-index:5;pointer-events:none;
+    display:grid;grid-template-columns:minmax(0,1fr) 48px;grid-auto-rows:48px;gap:12px 10px
+  }
+  .app.list-view .searchrow>*{pointer-events:auto}
+  .app.list-view #addItem{grid-column:2;grid-row:1}
+  .app.list-view #searchBtn{grid-column:2;grid-row:2}
+  .app.list-view .searchrow>button{
+    width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    color:var(--txt);background:rgba(22,33,58,.9);border:1px solid var(--line);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.45)
+  }
+  .app.list-view .searchrow>button:hover,.app.list-view .searchrow>button:focus-visible{background:rgba(34,48,80,.95);border-color:#3a4b78;outline:none}
+  .app.list-view .searchrow>button svg{width:20px;height:20px}
+  .app.list-view .search{
+    grid-column:1;grid-row:2;padding:0 16px;border-radius:24px;border-color:var(--line);
+    background:rgba(22,33,58,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.45);
+    opacity:0;visibility:hidden;transform:translateX(30px) scaleX(.85);transform-origin:right center;
+    transition:opacity .16s,transform .18s ease,visibility 0s .18s
+  }
+  .app.list-view .side.searching .search{opacity:1;visibility:visible;transform:none;transition:opacity .16s,transform .18s ease}
+  .app.list-view .search>svg{display:none}
+  .app.list-view .search input{font-size:16px}
   .readout{justify-content:space-between}
   .ro-time{width:178px;text-align:left}
   .ro-time b{font-size:14px}
@@ -758,6 +796,9 @@ body.sheet-open{overflow:hidden}
           </div>
           <div class="wk-title" id="wkTitle"></div>
           <div class="list wk-list" id="wkList"></div>
+          <button type="button" class="fab" id="wkAdd" title="Add an item on this day" aria-label="Add an item on this day">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
         </div>
       </div>
 
@@ -780,6 +821,10 @@ body.sheet-open{overflow:hidden}
           </div>
           <button type="button" class="addbtn" id="addItem" title="Add an item (uses the search text as its name)" aria-label="Add an item">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button type="button" class="searchbtn" id="searchBtn" title="Search" aria-label="Search" aria-expanded="false" aria-controls="q">
+            <svg class="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <svg class="ic-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
           </button>
         </div>
         <div class="filters" id="filters">

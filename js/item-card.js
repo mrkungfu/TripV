@@ -440,14 +440,16 @@ function newZone(v,f){
   return P? P.off : 0;
 }
 function nextHour(ts,off){ return Math.ceil((ts+off*MIN)/HOUR)*HOUR-off*MIN; }
-/* suggested times around the playhead for each kind */
-function newTimes(v){
+/* suggested times for each kind, around at (the playhead, or noon of the day picked in the calendar);
+   with a day (a local date index) the start stays on that date in the chosen place's zone */
+function newTimes(v,at,day){
   const so=newZone(v,'start'), eo=newZone(v,'end');
   if(v.kind==='stay'){
-    const t=Math.floor((now+so*MIN)/DAY)*DAY-so*MIN+15*HOUR;
+    const t=(day!=null? day : dateIdx(at,so))*DAY-so*MIN+15*HOUR;
     return {start:localInput(t,so), end:localInput(t+20*HOUR,eo)};
   }
-  const t=nextHour(now,so);
+  let t=nextHour(at,so);
+  if(day!=null && dateIdx(t,so)!==day) t=day*DAY-so*MIN+12*HOUR;
   return {start:localInput(t,so), end:v.kind==='travel'? localInput(t+2*HOUR,eo) : ''};
 }
 function freshId(cfg,prefix){
@@ -459,15 +461,18 @@ function freshId(cfg,prefix){
   return prefix+n;
 }
 
-function openNewItem(name){
+/* day (optional): the local date index to add on, e.g. the day open in the calendar's week view */
+function openNewItem(name,day){
   if(!M || !curCfg) return;
   const wasOpen=cardIsOpen();
-  const here=M.locationAt(now).place;
-  const next=M.LEGS.find(l=>l.t0>=now && l.to!==here);
+  const at=day==null || localIdx(now)===day? now : clamp(localNoon(day),M.T0,M.T1);
+  const here=M.locationAt(at).place;
+  const next=M.LEGS.find(l=>l.t0>=at && l.to!==here);
   const other=M.placeKeys.find(k=>k!==here)||here;
   const v={kind:'activity', mode:'flight', title:name||'', place:here, from:here, to:next?next.to:other};
-  Object.assign(v,newTimes(v));
-  cardNew={vals:v, auto:newTimes(v)};
+  cardNew={vals:v, at, day};
+  cardNew.auto=newTimes(v,at,day);
+  Object.assign(v,cardNew.auto);
   cardItem=null; cardEditing=false;
   clearTimeout(cardTimer); cardTimer=null;
   renderNewForm();
@@ -535,7 +540,7 @@ function setNewKind(kind){
   const v=cardNew.vals, a=cardNew.auto;
   const untouched=v.start===a.start && v.end===a.end;
   v.kind=kind;
-  cardNew.auto=newTimes(v);
+  cardNew.auto=newTimes(v,cardNew.at,cardNew.day);
   if(untouched) Object.assign(v,cardNew.auto);
   renderNewForm(null,null);
   const b=$('.sc-kinds [data-kind="'+kind+'"]'); if(b) b.focus();
@@ -572,8 +577,7 @@ function saveNew(){
   const name=persistTrip(cfg,'new item',msg=>renderNewForm(msg));
   if(!name) return;
   loadTrip(cfg,{keep:true});
-  const q=$('#q');
-  if(q.value){ q.value=''; q.dispatchEvent(new Event('input')); }
+  setSearchOpen(false);
   const id=entry.id+(kind==='stay'?'i':''), it=M.ITEMS.find(x=>x.id===id);
   if(it){ setNowForItem(id,it.t0); focusItem(id); }
   toast('Added to “'+name+'”');
