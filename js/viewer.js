@@ -350,7 +350,8 @@ function updateJourney(ts){
    ============================================================ */
 function buildCalendar(){
   const calShift=M.calOff*MIN;
-  const first=new Date(M.T0+calShift), lastD=new Date(M.T1+calShift);
+  setTripDays();
+  const first=new Date(tripIdx0*DAY), lastD=new Date(tripIdx1*DAY);
   const months=[];
   let y=first.getUTCFullYear(), mo=first.getUTCMonth();
   while(y<lastD.getUTCFullYear() || (y===lastD.getUTCFullYear()&&mo<=lastD.getUTCMonth())){
@@ -365,13 +366,13 @@ function buildCalendar(){
     let cells='';
     for(let i=0;i<firstDow;i++) cells+='<div></div>';
     for(let dnum=1;dnum<=nDays;dnum++){
-      const dayStart=Date.UTC(yy,mm,dnum,0,0)-calShift, dayEnd=dayStart+DAY;
+      const dayStart=Date.UTC(yy,mm,dnum,0,0)-calShift, idx=cellIdx(dayStart);
       const sample=dayStart+12*HOUR;
-      const inTrip=dayEnd>M.T0 && dayStart<M.T1;
+      const inTrip=idx>=tripIdx0 && idx<=tripIdx1;
       if(!inTrip){ cells+='<div class="day"><span class="num">'+dnum+'</span></div>'; continue; }
-      const evs=M.ITEMS.filter(it=>it.t0>=dayStart&&it.t0<dayEnd&&it.cls!=='gap');
+      const evs=M.ITEMS.filter(it=>itemIdx(it)===idx&&it.cls!=='gap');
       const gapDay=!evs.length;
-      const isToday=Date.now()>=dayStart&&Date.now()<dayEnd;
+      const isToday=idx===todayIdx();
       const dots=evs.slice(0,5).map(()=>'<i></i>').join('');
       cells+='<div class="day in'+(isToday?' today':'')+(gapDay?' open':'')+'" data-t="'+sample+'" data-d0="'+dayStart+'">'+
         flagIcons(dayStart)+
@@ -397,7 +398,7 @@ function buildCalendar(){
 /* while the trip is under way, days that are already over fade back */
 function syncCalPast(){
   const wall=Date.now(), active=wall>=M.T0&&wall<=M.T1;
-  $$('#calGrid .day.in, #wkDays .wk-day.in').forEach(d=>d.classList.toggle('past',active && daysAhead(+d.dataset.d0)<0));
+  $$('#calGrid .day.in, #wkDays .wk-day.in').forEach(d=>d.classList.toggle('past',active && daysAhead(cellIdx(+d.dataset.d0))<0));
 }
 /* fromUser: remember the choice, so the next visit (and the next trip) opens the same sub-view */
 function setCalMode(mode,noRender,fromUser){
@@ -437,8 +438,9 @@ function buildDayFlags(){
   const at=d0=>DAY_FLAGS[d0]||(DAY_FLAGS[d0]={stay:null,moves:[]});
   M.LEGS.forEach((l,i)=>{
     const p=M.LEGS[i-1];
-    if(p && p.to!==l.from) at(calDayStart(l.t0)).moves.push({from:p.to,to:l.from});
-    if(l.mode==='gap') at(calDayStart(l.t0)).moves.push({from:l.from,to:l.to,id:l.id});
+    const d0=dayOfIdx(dateIdx(l.t0,l.A.off));
+    if(p && p.to!==l.from) at(d0).moves.push({from:p.to,to:l.from});
+    if(l.mode==='gap') at(d0).moves.push({from:l.from,to:l.to,id:l.id});
   });
   for(let d0=tripFirstDay();d0<=tripLastDay();d0+=DAY){
     const s=nightGap(d0);
@@ -502,23 +504,23 @@ function dayBand(dayStart){
 /* follow the playhead: highlight its day, and move the week view along with it */
 let calCurDay=null, calCurChap=null, calLiveChap=null, chapStarts=[];
 function updateCalendar(ts){
-  const days=$$('#calGrid .day.in');
-  const day=days.find(d=>ts>=+d.dataset.d0&&ts<+d.dataset.d0+DAY)||null;
+  const days=$$('#calGrid .day.in'), idx=localIdx(ts);
+  const day=days.find(d=>cellIdx(+d.dataset.d0)===idx)||null;
   if(day!==calCurDay){
     if(calCurDay) calCurDay.classList.remove('cur');
     if(day) day.classList.add('cur');
     calCurDay=day;
-    days.forEach(d=>d.classList.toggle('before',+d.dataset.d0+DAY<=ts));
+    days.forEach(d=>d.classList.toggle('before',cellIdx(+d.dataset.d0)<idx));
   }
-  const pd=calDayStart(ts);
+  const pd=dayOfIdx(idx);
   if(pd!==wkPlayDay){ wkPlayDay=pd; if(!wkHold) setWeekDay(pd); }
   else syncWeekActive();
 }
 
 /* ---------- week view: the selected day's week up top, that day's items below ---------- */
 let calMode='month', wkDay=null, wkPlayDay=null, wkShownDay=null, wkActiveId=null, wkHold=false, wkSliding=false, wkSwiped=false;
-function tripFirstDay(){ return calDayStart(M.T0); }
-function tripLastDay(){ return calDayStart(M.T1-1); }
+function tripFirstDay(){ return dayOfIdx(tripIdx0); }
+function tripLastDay(){ return dayOfIdx(tripIdx1); }
 function weekStartOf(d){ return d-new Date(d+M.calOff*MIN).getUTCDay()*DAY; }
 function setWeekDay(d){
   d=clamp(d,tripFirstDay(),tripLastDay());
@@ -531,18 +533,18 @@ function hasWeek(dir){
   return dir<0 ? ws>tripFirstDay() : ws+7*DAY<=tripLastDay();
 }
 function renderWeek(){
-  if(wkDay==null) wkDay=clamp(calDayStart(now),tripFirstDay(),tripLastDay());
+  if(wkDay==null) wkDay=clamp(localDay(now),tripFirstDay(),tripLastDay());
   const calShift=M.calOff*MIN, ws=weekStartOf(wkDay), sel=new Date(wkDay+calShift);
   $('#wkMonth').textContent=MON_FULL[sel.getUTCMonth()];
   $('#wkPrev').disabled=!hasWeek(-1);
   $('#wkNext').disabled=!hasWeek(1);
   let cells='';
   for(let i=0;i<7;i++){
-    const d0=ws+i*DAY, n=new Date(d0+calShift).getUTCDate();
-    const inTrip=d0+DAY>M.T0 && d0<M.T1;
+    const d0=ws+i*DAY, n=new Date(d0+calShift).getUTCDate(), idx=cellIdx(d0);
+    const inTrip=idx>=tripIdx0 && idx<=tripIdx1;
     if(!inTrip){ cells+='<div class="wk-day"><span class="num">'+n+'</span></div>'; continue; }
-    const evs=M.ITEMS.filter(it=>it.t0>=d0&&it.t0<d0+DAY&&it.cls!=='gap');
-    const isToday=Date.now()>=d0&&Date.now()<d0+DAY;
+    const evs=M.ITEMS.filter(it=>itemIdx(it)===idx&&it.cls!=='gap');
+    const isToday=idx===todayIdx();
     cells+='<button type="button" class="wk-day in'+(d0===wkDay?' sel':'')+(isToday?' today':'')+(evs.length?'':' open')+'" data-d0="'+d0+'"'+
       ' aria-label="'+fmt(d0+12*HOUR,M.calOff,'D')+flagTexts(d0).map(x=>'. '+x.txt).join('')+'"'+(d0===wkDay?' aria-current="date"':'')+'>'+
       flagIcons(d0)+
@@ -554,14 +556,14 @@ function renderWeek(){
 
   const L=M.locationAt(clamp(wkDay+12*HOUR,M.T0,M.T1));
   const where=L.moving? M.PLACES[L.leg.from].n+' → '+M.PLACES[L.leg.to].n : L.P.n;
-  const n=daysAhead(wkDay);
+  const wkIdx=cellIdx(wkDay), n=daysAhead(wkIdx);
   $('#wkTitle').className='wk-title '+(n<0?'past':n===0?'today':'future');
   $('#wkTitle').innerHTML='<b>'+fmt(wkDay+12*HOUR,M.calOff,'d')+'</b><span class="wk-where">'+esc(where)+'</span>'+
-    '<span class="dnum">'+(n===0?'Today · ':'')+dayLabel(wkDay)+'</span>';
-  const items=M.ITEMS.filter(it=>it.t0>=wkDay&&it.t0<wkDay+DAY);
+    '<span class="dnum">'+(n===0?'Today · ':'')+dayLabel(wkIdx)+'</span>';
+  const items=M.ITEMS.filter(it=>itemIdx(it)===wkIdx);
   const flags=flagTexts(wkDay);
   $('#wkList').innerHTML=(flags.length?'<div class="wk-flags'+(n<0?' past':'')+'">'+flags.map(f=>'<div class="wk-flag">'+flagSvg(f.k)+'<span>'+f.txt+'</span></div>').join('')+'</div>':'')+
-    (items.length? items.map(it=>cardHTML(it,wkDay)).join('') : '<div class="emptylist">Nothing booked this day.</div>');
+    (items.length? items.map(it=>cardHTML(it,wkIdx)).join('') : '<div class="emptylist">Nothing booked this day.</div>');
   if(wkDay!==wkShownDay){ $('#wkList').scrollTop=0; wkShownDay=wkDay; }
   wkActiveId=null;
   syncListStatus();
@@ -578,9 +580,8 @@ function syncWeekActive(){
 /* pick a day: it becomes the selected day and the whole page moves to it */
 function selectCalDay(d0){
   d0=clamp(d0,tripFirstDay(),tripLastDay());
-  const w=Date.now();
-  if(w>=d0 && w<d0+DAY) jumpToNow();
-  else setNow(clamp(d0+12*HOUR,M.T0,M.T1));
+  if(cellIdx(d0)===todayIdx()) jumpToNow();
+  else setNow(clamp(localNoon(cellIdx(d0)),M.T0,M.T1));
   setWeekDay(d0);
 }
 /* the same weekday in the previous / next week, clamped to the trip */
@@ -715,8 +716,8 @@ function passes(it,f){
   return true;
 }
 /* one itinerary row — shared by the list and the calendar's week view */
-function cardHTML(it,dayT){
-  return '<div class="card" role="button" tabindex="0" data-id="'+esc(it.id)+'" data-t="'+it.t0+'" data-day="'+dayT+'">'+
+function cardHTML(it,day){
+  return '<div class="card" role="button" tabindex="0" data-id="'+esc(it.id)+'" data-t="'+it.t0+'" data-day="'+day+'">'+
     '<div class="rail" style="background:'+it.color+'"></div>'+
     '<div class="when"><b>'+fmt(it.t0,it.off,'t')+'</b><span>'+tzLabel(it.off)+'</span></div>'+
     '<div class="body">'+
@@ -731,24 +732,25 @@ function cardHTML(it,dayT){
 }
 function renderList(){
   const listEl=$('#list');
-  let html='', lastKey='', dayT=0, n=0;
+  let html='', lastDay=null, n=0;
   M.ITEMS.forEach(it=>{
     if(!passes(it)) return;
     n++;
-    const key=fmt(it.t0,it.off,'k');
-    if(key!==lastKey){
-      lastKey=key; dayT=it.t0;
-      html+='<div class="daygroup" data-t="'+it.t0+'"><b>'+fmt(it.t0,it.off,'d')+'</b>'+esc(M.PLACES[it.place].n)+
+    const day=itemIdx(it);
+    if(day!==lastDay){
+      lastDay=day;
+      html+='<div class="daygroup" data-day="'+day+'"><b>'+fmt(it.t0,it.off,'d')+'</b>'+esc(M.PLACES[it.place].n)+
             '<span class="dnum"></span></div>';
     }
-    html+=cardHTML(it,dayT);
+    html+=cardHTML(it,day);
   });
   listEl.innerHTML = n? html : '<div class="emptylist">Nothing matches that.</div>';
   renderFilterCounts();
   CARDS=$$('#list .card').map(el=>{
     const id=el.dataset.id;
     const it=M.ITEMS.find(x=>x.id===id);
-    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, day:+el.dataset.day, id, transit:!!it&&M.LEGS.includes(it.ref), gap:!!it&&it.cls==='gap'};
+    const leg=it&&M.LEGS.includes(it.ref)?it.ref:null;
+    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, day:+el.dataset.day, id, lead:leg?leadTime(leg):0, moving:!!leg&&leg.mode!=='gap', gap:!!it&&it.cls==='gap'};
   });
   syncListStatus();
   lastActive=-2;
@@ -757,9 +759,9 @@ function renderList(){
 /* past / today / future by the wall clock: earlier days fade out, and today's items tick off once they're over */
 function syncListStatus(){
   $$('#list .daygroup').forEach(h=>{
-    const t=+h.dataset.t, n=daysAhead(t), d=$('.dnum',h);
+    const day=+h.dataset.day, n=daysAhead(day), d=$('.dnum',h);
     h.className='daygroup '+(n<0?'past':n===0?'today':'future');
-    d.textContent=dayLabel(t);
+    d.textContent=dayLabel(day);
     if(n>0) d.title='in '+n+' day'+(n===1?'':'s'); else d.removeAttribute('title');
   });
   const wall=Date.now();
@@ -785,48 +787,64 @@ function renderFilterCounts(){
   });
 }
 function listVisible(){ return $('#list').clientHeight>0; }
-function calDayStart(ts){
-  const shift=M.calOff*MIN;
-  return Math.floor((ts+shift)/DAY)*DAY-shift;
+/* Days are local calendar dates (day counts from dateIdx): an item belongs to the date on its own clock,
+   and "today" is the date where the itinerary has you right now. Calendar cells are keyed by d0, the
+   midnight of their date on the calendar's clock (calOff). */
+function dayOfIdx(i){ return i*DAY-M.calOff*MIN; }
+function cellIdx(d0){ return dateIdx(d0,M.calOff); }
+function itemIdx(it){ return dateIdx(it.t0,it.off); }
+function localIdx(ts){ return dateIdx(ts,M.offAt(ts)); }
+function localDay(ts){ return dayOfIdx(localIdx(ts)); }
+function todayIdx(){ return localIdx(Date.now()); }
+/* noon of local date i where the itinerary has you then */
+function localNoon(i){
+  let t=i*DAY+12*HOUR-M.calOff*MIN;
+  t=i*DAY+12*HOUR-M.offAt(t)*MIN;
+  return t;
 }
-function daysAhead(ts){
-  return Math.round((calDayStart(ts)-calDayStart(Date.now()))/DAY);
-}
-function dayLabel(ts){
-  const n=daysAhead(ts);
-  const label='Day '+M.dayNo(ts);
+function daysAhead(idx){ return idx-todayIdx(); }
+function dayLabel(idx){
+  const n=daysAhead(idx);
+  const label='Day '+Math.max(1,idx-M.DAY1_IDX+1);
   return n>0 ? label+' ('+n+'d)' : label;
+}
+let tripIdx0=0, tripIdx1=0;
+function setTripDays(){
+  const idxs=M.ITEMS.map(itemIdx).concat(localIdx(M.T0),localIdx(M.T1));
+  tripIdx0=Math.min(...idxs); tripIdx1=Math.max(...idxs);
 }
 function lastStartedIndex(ts){
   let idx=-1;
   for(let i=0;i<CARDS.length;i++){ if(CARDS[i].t<=ts+1) idx=i; else break; }
   return idx;
 }
-/* the latest-started plane / train / bus / … leg still under way at ts, so a check-in or check-out
-   that falls mid-journey doesn't steal the focus */
-function transitUnderwayIndex(ts){
-  let idx=-1, gap=-1;
-  for(let i=0;i<CARDS.length && CARDS[i].t<=ts+1;i++){
-    const c=CARDS[i];
-    if(c.transit && ts<c.t1){ if(c.gap) gap=i; else idx=i; }
-  }
-  return idx>=0 ? idx : gap;
+/* how long before departure a leg takes the highlight — by then you should be on your way to it */
+const MAX_LEAD=3.5*HOUR;
+function leadTime(l){
+  if(l.mode==='flight') return (l.A.cc && l.A.cc===l.B.cc ? 2.5 : 3.5)*HOUR;
+  if(l.mode==='train'||l.mode==='bus'||l.mode==='ferry') return HOUR;
+  if(l.mode==='car') return 30*MIN;
+  return 0;
 }
-function nowHighlightIndex(ts){
-  const moving=transitUnderwayIndex(ts);
-  if(moving>=0) return moving;
-  const start=calDayStart(Date.now()), end=start+DAY;
-  let firstToday=-1;
+/* live: the plane / train / bus / … you're on; otherwise a departure inside its lead time, even with
+   something else before it (a check-out on the way to the airport); otherwise an activity still under way;
+   otherwise the next thing that hasn't started yet */
+function nextHighlightIndex(ts){
+  let riding=-1, ongoing=-1, next=-1;
   for(let i=0;i<CARDS.length;i++){
-    if(CARDS[i].t>=start && CARDS[i].t<end){ firstToday=i; break; }
+    const c=CARDS[i];
+    if(c.t<=ts+1){
+      if(ts<c.t1){ if(c.moving) riding=i; else if(!c.gap) ongoing=i; }
+      continue;
+    }
+    if(riding>=0) return riding;
+    if(next<0) next=i;
+    else if(c.t-MAX_LEAD>ts) break;
+    if(c.lead && c.t-c.lead<=ts) return i;
   }
-  const last=lastStartedIndex(ts);
-  if(last<0) return firstToday;
-  const c=CARDS[last];
-  if(c.t>=start && c.t<end) return last;          // last thing that already happened today
-  if(ts<c.t1) return last;                        // still underway from a previous day
-  if(firstToday>=0) return firstToday;            // nothing yet today → first thing on this day
-  return last;
+  if(riding>=0) return riding;
+  if(ongoing>=0) return ongoing;
+  return next>=0 ? next : CARDS.length-1;
 }
 function scrollCardIntoView(el){
   programScroll=true;
@@ -839,7 +857,7 @@ function scrollCardIntoView(el){
   });
 }
 function syncList(ts,force){
-  const idx=liveNow ? nowHighlightIndex(ts) : lastStartedIndex(ts);
+  const idx=liveNow ? nextHighlightIndex(Date.now()) : lastStartedIndex(ts);
   if(idx===lastActive && !force) return;
   if(lastActive>=0 && CARDS[lastActive]) CARDS[lastActive].el.classList.remove('is-active');
   lastActive=idx;
@@ -863,7 +881,7 @@ function focusItem(id){
     l.scrollTop += (r.top-lr.top) - lr.height*0.32;
   }
   const it=M.ITEMS.find(x=>x.id===id);
-  if(it) setWeekDay(calDayStart(it.t0));
+  if(it) setWeekDay(dayOfIdx(itemIdx(it)));
   openCard(id);
 }
 
@@ -892,7 +910,7 @@ function setNowForItem(id,t){
 let liveTimer=null, liveDay=null;
 function refreshLive(){
   if(!M || !liveNow || playing) return;
-  const day=calDayStart(Date.now());
+  const day=todayIdx();
   if(day!==liveDay){
     // "today" markers and "(Nd)" labels are baked into the calendar, scrubber and list
     liveDay=day;
@@ -913,10 +931,10 @@ function render(listForce){
   syncList(now,listForce);
   syncWeekActive();
   const L=M.locationAt(now);
-  const off=L.moving? (L.f<.5?L.leg.A.off:L.leg.B.off) : L.P.off;
+  const off=M.offAt(now);
   const wall=Date.now(), isNow=liveNow && wall>=M.T0 && wall<=M.T1;
   $('#roTime').innerHTML=(isNow?'Now · ':'')+fmt(now,off,'t')+'<span class="tz">'+tzLabel(off)+'</span>';
-  $('#roDate').textContent=fmt(now,off,'D')+'  ·  day '+M.dayNo(now)+' of '+M.TOTAL_DAYS;
+  $('#roDate').textContent=fmt(now,off,'D')+'  ·  day '+M.dayNo(now,off)+' of '+M.TOTAL_DAYS;
   const ic=$('#roIcon');
   let roItem=null, roTitle=null;
   if(L.moving){
@@ -1067,7 +1085,7 @@ function loadTrip(cfg,opts){
     filter='all'; $$('#filters button').forEach(b=>b.classList.toggle('on',b.dataset.f==='all'));
   }
 
-  liveDay=calDayStart(Date.now());
+  liveDay=todayIdx();
   if(!keep){
     wkDay=null; wkPlayDay=null;
     setCalMode(calModePref||(M.TOTAL_DAYS<=7?'week':'month'),true);
@@ -1270,8 +1288,8 @@ function bindUI(){
   $('#calGrid').addEventListener('pointerover',e=>{
     const d=e.target.closest('.day.in'); if(!d) return;
     const t=+d.dataset.t, L=M.locationAt(clamp(t,M.T0,M.T1));
-    const dayStart=t-12*HOUR, dayEnd=dayStart+DAY;
-    const evs=M.ITEMS.filter(it=>it.t0>=dayStart&&it.t0<dayEnd);
+    const dayStart=+d.dataset.d0, idx=cellIdx(dayStart);
+    const evs=M.ITEMS.filter(it=>itemIdx(it)===idx);
     showTip(e,'<b>'+fmt(t,M.calOff,'D')+'</b><span class="m">'+
       (L.moving?'travelling '+esc(M.PLACES[L.leg.from].n)+' → '+esc(M.PLACES[L.leg.to].n):'in '+esc(L.P.n)+(L.P.r?', '+esc(L.P.r):''))+'</span>'+
       (evs.length?'<div style="margin-top:5px">'+evs.map(it=>'· '+fmt(it.t0,it.off,'t')+' '+esc(it.title)).join('<br>')+'</div>'

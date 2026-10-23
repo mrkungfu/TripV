@@ -217,7 +217,7 @@ function cardHead(it,v){
   return '<header class="sc-head">'+
     '<div class="grab"></div>'+
     '<div class="kick"><span class="badge">'+solid(it.icon)+esc(v.kicker)+'</span>'+
-      '<span class="daylbl">Day '+M.dayNo(it.t0)+' · '+fmt(it.t0,it.off,'d')+'</span>'+
+      '<span class="daylbl">Day '+M.dayNo(it.t0,it.off)+' · '+fmt(it.t0,it.off,'d')+'</span>'+
       '<button type="button" class="x" data-close title="Close (Esc)" aria-label="Close">'+ico(LINE_ICON.close)+'</button></div>'+
     '<h2 id="scTitle">'+esc(v.title)+'</h2>'+
     (v.sub?'<div class="sub">'+esc(v.sub)+'</div>':'')+

@@ -56,7 +56,7 @@ in the editor's **Schema help** tab; the short version:
      "lat":35.649,"lon":139.789,"addr":"Toyosu","conf":"…","phone":"…","warn":"…","det":"…"}
   ],
   "focus": ["tyo","kyo"],        // optional: what the map's Focus button fits
-  "calendarOffset": 540          // optional: which clock defines a calendar "day"
+  "calendarOffset": 540          // optional: which clock the calendar's colour bands and missing-bed checks use
 }
 ```
 
@@ -82,6 +82,21 @@ somewhere other than where the previous one ended. A marker in the top-right cor
 stay covers that night (checked at 2 am local time). Nights at the trip's starting place, on
 an overnight flight / train / bus, or during a stopover under 6 hours are not flagged. The week
 view also lists the day's flags above its items.
+
+## Days and what's next
+
+A day is a local calendar date: every item belongs to the date on its own clock, and "today" is
+the date where the itinerary has you right now (at home before the trip, at the last stop after it).
+Day 1 is the departure date at the origin and each date after it counts on by one, so the list,
+the calendar, the item card and the date readout always agree, even across the date line.
+
+While the time is live (the **Now** button), the itinerary highlights the flight / train / bus / car /
+ferry you're on. Otherwise a departure takes the highlight early, ahead of anything scheduled before
+it: 3.5 h before an international flight, 2.5 h before a domestic one (both ends in the same `cc`),
+1 h before a train, bus or ferry, and 30 min before a car. Failing that, an activity still under way
+keeps it; once that's over (or after a check-in / check-out, or during an unbooked gap) the next item
+that hasn't started is highlighted. Scrubbing or picking an item highlights
+the item at the playhead as before.
 
 On a travel card the clock change (e.g. "+16 h") sits in the middle column, level with the
 date and UTC offset shown under each end.
@@ -179,7 +194,8 @@ The original single-file page had several issues that are fixed here:
   now derived from the trip's actual time window.
 - **Hardcoded timezones**: day boundaries used a baked-in UTC+2 and day numbering a
   baked-in Phoenix offset. Both now come from the trip data (`calendarOffset` defaults
-  to the offset where the most time is spent; day numbers anchor to the origin's clock).
+  to the offset where the most time is spent; day numbers count local dates from the
+  departure date).
 - **Antimeridian smear**: a route crossing ±180° longitude (e.g. Seattle → Tokyo, as in
   the new demo) drew a line right across the map. Route paths now split at the
   antimeridian.

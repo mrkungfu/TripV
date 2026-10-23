@@ -42,6 +42,8 @@ function dur(ms){
   if(h<36) return h+' h'+(m%60?' '+(m%60)+' m':'');
   return d+(d===1?' day':' days')+(h%24?' '+(h%24)+' h':'');
 }
+/** the local calendar date of an instant in a fixed UTC offset, as a day count since 1970-01-01 */
+function dateIdx(ts,off){ return Math.floor((ts+off*MIN)/DAY); }
 function nights(a,b){ return Math.max(1,Math.round((b-a)/DAY)); }
 function haversine(a,b){
   const R=6371, p=Math.PI/180;
@@ -195,8 +197,7 @@ function buildModel(raw){
   const originOff=PLACES[originKey].off;
   // local midnight of the departure day, in the origin's clock — day numbering anchors here
   const DAY1=Math.floor((LEGS[0].t0+originOff*MIN)/DAY)*DAY-originOff*MIN;
-  const dayNo=t=>Math.max(1,Math.floor((t-DAY1)/DAY)+1);
-  const TOTAL_DAYS=dayNo(T1);
+  const DAY1_IDX=dateIdx(LEGS[0].t0,originOff);
 
   /* segments: alternating MOVE (a leg) and STAY (between legs) */
   const SEGS=[];
@@ -259,6 +260,17 @@ function buildModel(raw){
     const P=PLACES[LEGS[LEGS.length-1].to];
     return {lat:P.lat, lon:P.lon, place:LEGS[LEGS.length-1].to, P, moving:false};
   }
+  /* the UTC offset of the clock where you are at ts (the nearer end of a leg while moving) */
+  function offAt(ts){
+    const L=locationAt(ts);
+    return L.moving? (L.f<.5?L.leg.A.off:L.leg.B.off) : L.P.off;
+  }
+  /* a trip day is a local calendar date: day 1 is the departure date at the origin, and every
+     date after it counts on by one, so "Day N" always agrees with the date shown beside it */
+  function dayNo(ts,off){
+    return Math.max(1,dateIdx(ts,off==null?offAt(ts):off)-DAY1_IDX+1);
+  }
+  const TOTAL_DAYS=dayNo(T1);
 
   /* flattened itinerary list */
   const ITEMS=[];
@@ -299,7 +311,7 @@ function buildModel(raw){
     config:cfg,
     title:cfg.title||'Untitled trip',
     PLACES, placeKeys, LEGS, STAYS, EVENTS, SEGS, ITEMS, NIGHTS,
-    T0, T1, TRIP_MS, DAY1, TOTAL_DAYS, dayNo, locationAt,
+    T0, T1, TRIP_MS, DAY1, DAY1_IDX, TOTAL_DAYS, dayNo, locationAt, offAt,
     originKey, originOff, calOff, focusKeys
   };
 }
