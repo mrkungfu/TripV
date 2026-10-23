@@ -750,7 +750,7 @@ function renderList(){
     const id=el.dataset.id;
     const it=M.ITEMS.find(x=>x.id===id);
     const leg=it&&M.LEGS.includes(it.ref)?it.ref:null;
-    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, day:+el.dataset.day, id, lead:leg?leadTime(leg):0};
+    return {el, t:+el.dataset.t, t1:it&&it.t1!=null?it.t1:+el.dataset.t, day:+el.dataset.day, id, lead:leg?leadTime(leg):0, moving:!!leg&&leg.mode!=='gap', gap:!!it&&it.cls==='gap'};
   });
   syncListStatus();
   lastActive=-2;
@@ -826,17 +826,24 @@ function leadTime(l){
   if(l.mode==='car') return 30*MIN;
   return 0;
 }
-/* live: the next thing that hasn't started yet, rather than the one under way — except that a departure
-   inside its lead time wins over anything that comes before it (a check-out on the way to the airport) */
+/* live: the plane / train / bus / … you're on; otherwise a departure inside its lead time, even with
+   something else before it (a check-out on the way to the airport); otherwise an activity still under way;
+   otherwise the next thing that hasn't started yet */
 function nextHighlightIndex(ts){
-  let next=-1;
+  let riding=-1, ongoing=-1, next=-1;
   for(let i=0;i<CARDS.length;i++){
     const c=CARDS[i];
-    if(c.t<=ts+1) continue;
+    if(c.t<=ts+1){
+      if(ts<c.t1){ if(c.moving) riding=i; else if(!c.gap) ongoing=i; }
+      continue;
+    }
+    if(riding>=0) return riding;
     if(next<0) next=i;
     else if(c.t-MAX_LEAD>ts) break;
     if(c.lead && c.t-c.lead<=ts) return i;
   }
+  if(riding>=0) return riding;
+  if(ongoing>=0) return ongoing;
   return next>=0 ? next : CARDS.length-1;
 }
 function scrollCardIntoView(el){

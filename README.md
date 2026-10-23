@@ -90,10 +90,12 @@ the date where the itinerary has you right now (at home before the trip, at the 
 Day 1 is the departure date at the origin and each date after it counts on by one, so the list,
 the calendar, the item card and the date readout always agree, even across the date line.
 
-While the time is live (the **Now** button), the itinerary highlights what's coming up next rather
-than what is under way. A departure takes the highlight early, ahead of anything scheduled before
+While the time is live (the **Now** button), the itinerary highlights the flight / train / bus / car /
+ferry you're on. Otherwise a departure takes the highlight early, ahead of anything scheduled before
 it: 3.5 h before an international flight, 2.5 h before a domestic one (both ends in the same `cc`),
-1 h before a train, bus or ferry, and 30 min before a car. Scrubbing or picking an item highlights
+1 h before a train, bus or ferry, and 30 min before a car. Failing that, an activity still under way
+keeps it; once that's over (or after a check-in / check-out, or during an unbooked gap) the next item
+that hasn't started is highlighted. Scrubbing or picking an item highlights
 the item at the playhead as before.
 
 On a travel card the clock change (e.g. "+16 h") sits in the middle column, level with the
