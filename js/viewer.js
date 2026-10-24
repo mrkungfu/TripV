@@ -791,7 +791,7 @@ function renderList(){
     }
     html+=cardHTML(it,day);
   });
-  listEl.innerHTML = n? html : '<div class="emptylist">Nothing matches that.</div>';
+  listEl.innerHTML = n? html+listEndHTML() : '<div class="emptylist">Nothing matches that.</div>';
   renderFilterCounts();
   CARDS=$$('#list .card').map(el=>{
     const id=el.dataset.id;
@@ -802,6 +802,46 @@ function renderList(){
   syncListStatus();
   lastActive=-2;
   syncList(now,true);
+}
+function listEndHTML(){
+  const last=M.LEGS[M.LEGS.length-1], P=M.PLACES[last.to];
+  const km=Math.round(M.LEGS.reduce((s,l)=>s+l.km,0)), places=M.placeKeys.length;
+  return '<div class="list-end" role="button" tabindex="0" aria-label="End of the trip">'+
+    '<svg class="le-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+
+      '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/></svg>'+
+    '<b>The end of the trip</b>'+
+    '<span class="le-sub">'+(last.to===M.originKey?'Back in ':'Last stop: ')+esc(P.n)+' · '+fmt(M.T1,P.off,'d')+'</span>'+
+    '<span class="le-stats">'+M.TOTAL_DAYS+' days · '+places+' place'+(places===1?'':'s')+' · '+km.toLocaleString()+' km</span>'+
+    '<span class="le-quip" aria-live="polite"></span>'+
+  '</div>';
+}
+const END_QUIPS=[
+  'Where to next?', 'Jet lag sold separately.', 'Unpack. Laundry. Repeat.', 'Achievement unlocked: globetrotter.',
+  'The postcards are still in your bag, aren’t they?', 'Please return your seat to the upright position.',
+  'Same time next year?', 'Souvenirs: definitely too many.', 'Home is where the Wi-Fi connects automatically.'
+];
+let quipIdx=-1;
+/* the easter egg: a fresh one-liner and a burst of confetti in the itinerary's colours */
+function celebrateEnd(el){
+  quipIdx=(quipIdx+1+Math.floor(Math.random()*(END_QUIPS.length-1)))%END_QUIPS.length;
+  $('.le-quip',el).textContent=END_QUIPS[quipIdx];
+  el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const r=$('.le-ic',el).getBoundingClientRect(), x=r.left+r.width/2, y=r.top+r.height/2;
+  const colors=Object.values(MODE_COLOR);
+  for(let i=0;i<42;i++){
+    const p=document.createElement('i');
+    p.className='confetti';
+    p.style.cssText='left:'+x+'px;top:'+y+'px;background:'+colors[i%colors.length];
+    document.body.appendChild(p);
+    const a=-Math.PI*(.12+.76*Math.random()), v=90+170*Math.random();
+    const dx=Math.cos(a)*v, dy=Math.sin(a)*v, spin=(Math.random()<.5?-1:1)*(360+540*Math.random());
+    p.animate([
+      {transform:'translate(0,0) rotate(0)', opacity:1},
+      {transform:'translate('+dx*.8+'px,'+dy+'px) rotate('+spin*.4+'deg)', opacity:1, offset:.35},
+      {transform:'translate('+dx+'px,'+(dy+240)+'px) rotate('+spin+'deg)', opacity:0}
+    ],{duration:1100+600*Math.random(), easing:'cubic-bezier(.2,.6,.4,1)'}).onfinish=()=>p.remove();
+  }
 }
 /* past / today / future by the wall clock: earlier days fade out, and today's items tick off once they're over */
 function syncListStatus(){
@@ -1358,10 +1398,13 @@ function bindUI(){
   };
   $('#list').addEventListener('click',e=>{
     const c=e.target.closest('.card'); if(c) openFromList(c);
+    const end=e.target.closest('.list-end'); if(end) celebrateEnd(end);
   });
   $('#list').addEventListener('keydown',e=>{
-    const c=e.target.closest('.card');
-    if(c && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); openFromList(c); }
+    if(e.key!=='Enter' && e.key!==' ') return;
+    const c=e.target.closest('.card'), end=e.target.closest('.list-end');
+    if(c){ e.preventDefault(); openFromList(c); }
+    else if(end){ e.preventDefault(); celebrateEnd(end); }
   });
   $('#filters').addEventListener('click',e=>{
     const b=e.target.closest('button'); if(!b) return;
@@ -1418,8 +1461,9 @@ function bindUI(){
   addEventListener('keydown',e=>{
     if(e.key==='Escape' && !$('#statsPop').hidden){ setStatsPop(false); $('#statDays').focus(); return; }
     if(cardIsOpen() || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-    if(e.target.closest && e.target.closest('#list .card, #wkList .card, #roLoc.has-item') && (e.key==='Enter'||e.code==='Space')) return;
-    if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
+    if(e.target.closest && e.target.closest('#list .card, #list .list-end, #wkList .card, #roLoc.has-item') && (e.key==='Enter'||e.code==='Space')) return;
+    if(e.key==='/' && listVisible()){ e.preventDefault(); setSearchOpen(true); }
+    else if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
     else if(e.key==='ArrowRight'){ if(e.shiftKey) setNow(now+DAY); else stepItem(1); }
     else if(e.key==='ArrowLeft'){ if(e.shiftKey) setNow(now-DAY); else stepItem(-1); }
     else if(e.key==='1') setView('map');
@@ -1440,11 +1484,12 @@ function bindUI(){
     },120);
   });
 
-  /* the view tabs and time/location readout sit in the header on wide screens, and at the top of the sticky footer on narrow ones */
-  const tabs=$('#tabs'), readout=$('.readout');
+  /* the view tabs and time/location readout sit in the header on wide screens, and at the top of the sticky footer on narrow ones;
+     NOW sits after the slider on wide screens, and with the player controls on narrow ones */
+  const tabs=$('#tabs'), readout=$('.readout'), toNow=$('#toNow');
   const placeControls=()=>{
-    if(narrow.matches){ $('.transport').prepend(readout); $('.transport').prepend(tabs); }
-    else { $('.topbar').appendChild(tabs); $('.topbar').appendChild(readout); }
+    if(narrow.matches){ $('.transport').prepend(readout); $('.transport').prepend(tabs); $('.playgrp').appendChild(toNow); }
+    else { $('.topbar').appendChild(tabs); $('.topbar').appendChild(readout); $('.transport').appendChild(toNow); }
     if(!M) return;
     if(narrow.matches && !hasPlayer(currentView)) stopPlay();
     if(currentView==='list' && !narrow.matches) setView('map', true);
@@ -1479,13 +1524,13 @@ function bindUI(){
 
 /* on narrow screens these views drop the play / step / speed controls and keep just the slider and NOW */
 function hasPlayer(v){ return v==='map' || v==='journey'; }
-/* the narrow list view's floating search: opening shows the field, closing clears the search */
+/* the itinerary's floating search: opening shows the field, closing clears the search */
 function setSearchOpen(open){
   const btn=$('#searchBtn'), q=$('#q');
   $('.side').classList.toggle('searching',open);
   btn.setAttribute('aria-expanded',String(open));
-  btn.title=open?'Clear and close search':'Search';
-  btn.setAttribute('aria-label',btn.title);
+  btn.title=open?'Clear and close search':'Search (/)';
+  btn.setAttribute('aria-label',open?btn.title:'Search');
   if(open){ q.focus(); return; }
   if(q.value||query){ q.value=''; query=''; if(M) renderList(); }
   if(document.activeElement===q) q.blur();
