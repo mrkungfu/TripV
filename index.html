@@ -259,18 +259,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .callegend i{width:11px;height:11px;border-radius:3px;display:inline-block}
 
 /* ---------- side panel ---------- */
-.side{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);display:flex;flex-direction:column;min-height:0;min-width:0;box-shadow:var(--shadow)}
+.side{position:relative;background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);display:flex;flex-direction:column;min-height:0;min-width:0;box-shadow:var(--shadow)}
 .sidehead{padding:11px 12px 9px;border-bottom:1px solid var(--line-soft);display:flex;flex-direction:column;gap:8px}
-.searchrow{display:flex;gap:7px}
-.addbtn{
-  flex:none;width:33px;border-radius:9px;display:flex;align-items:center;justify-content:center;
-  color:var(--txt-dim);background:rgba(255,255,255,.045);border:1px solid var(--line-soft)
-}
-.addbtn:hover,.addbtn:focus-visible{color:#fff;border-color:#3a4b78;background:rgba(255,255,255,.09);outline:none}
-.addbtn svg{width:16px;height:16px}
-.searchbtn{display:none}
-.searchbtn .ic-x,.side.searching .searchbtn .ic-search{display:none}
-.side.searching .searchbtn .ic-x{display:block}
 /* round controls floating over a list's lower-right corner */
 .fab{
   width:48px;height:48px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
@@ -279,10 +269,25 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 }
 .fab:hover,.fab:focus-visible{background:rgba(34,48,80,.95);border-color:#3a4b78;outline:none}
 .fab svg{width:20px;height:20px}
-.search{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.045);border:1px solid var(--line-soft);border-radius:9px;padding:6px 10px}
-.search input{flex:1;background:none;border:none;outline:none;color:var(--txt);font:inherit;font-size:13px}
+/* the itinerary's add sits above search over the list's lower-right corner; search opens its field to the left */
+.searchrow{
+  position:absolute;left:14px;right:14px;bottom:14px;z-index:5;pointer-events:none;
+  display:grid;grid-template-columns:minmax(0,1fr) 48px;grid-auto-rows:48px;gap:12px 10px
+}
+.searchrow>*{pointer-events:auto}
+#addItem{grid-column:2;grid-row:1}
+#searchBtn{grid-column:2;grid-row:2}
+.searchbtn .ic-x,.side.searching .searchbtn .ic-search{display:none}
+.side.searching .searchbtn .ic-x{display:block}
+.search{
+  grid-column:1;grid-row:2;min-width:0;display:flex;align-items:center;padding:0 16px;border-radius:24px;border:1px solid var(--line);
+  background:rgba(22,33,58,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.45);
+  opacity:0;visibility:hidden;transform:translateX(30px) scaleX(.85);transform-origin:right center;
+  transition:opacity .16s,transform .18s ease,visibility 0s .18s
+}
+.side.searching .search{opacity:1;visibility:visible;transform:none;transition:opacity .16s,transform .18s ease}
+.search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--txt);font:inherit;font-size:15px}
 .search input::placeholder{color:var(--txt-faint)}
-.search svg{width:14px;height:14px;color:var(--txt-faint);flex:none}
 .filters{display:flex;gap:5px;flex-wrap:wrap}
 .filters button{
   font-size:11px;padding:4px 9px;border-radius:20px;border:1px solid var(--line-soft);
@@ -295,7 +300,27 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .filters button.on .fc{color:#56627e}
 .filters button.none{opacity:.5}
 .tabs button[data-view="list"]{display:none}
-.list{overflow:auto;padding:6px 10px 26px;flex:1;scroll-behavior:smooth}
+.list{overflow:auto;padding:6px 10px 14px;flex:1;scroll-behavior:smooth}
+/* closes the itinerary; tall enough, and inset enough, that the floating add / search never cover the last item or this text */
+.list-end{
+  position:relative;min-height:136px;margin-top:10px;padding:18px 62px 16px;border-top:1px dashed var(--line);
+  display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none
+}
+.side.searching .list{padding-bottom:74px}
+.list-end:focus-visible{outline:2px solid #3a4b78;outline-offset:-2px;border-radius:12px}
+.list-end .le-ic{width:30px;height:30px;margin-bottom:4px;color:var(--flight);transform-origin:20% 90%;transition:transform .2s}
+.list-end:hover .le-ic{transform:rotate(-8deg)}
+.list-end.pop .le-ic{animation:le-wave .6s ease}
+@keyframes le-wave{25%{transform:rotate(-16deg) scale(1.15)}60%{transform:rotate(10deg) scale(1.1)}}
+.list-end b{font-size:13.5px;font-weight:650;letter-spacing:.02em}
+.list-end .le-sub{font-size:11.5px;color:var(--txt-dim)}
+.list-end .le-stats{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-faint)}
+.list-end .le-quip{font-size:12px;color:var(--flight);min-height:1.45em;margin-top:4px}
+.list-end .le-quip:empty{visibility:hidden}
+.list-end.pop .le-quip{animation:le-quip .35s ease}
+@keyframes le-quip{from{opacity:0;transform:translateY(4px)}}
+.confetti{position:fixed;z-index:80;width:7px;height:11px;margin:-5px 0 0 -3px;border-radius:2px;pointer-events:none}
 .daygroup{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,var(--panel) 72%,rgba(17,26,46,0));
   padding:11px 2px 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint);
   display:flex;align-items:baseline;gap:8px;height:35px}
@@ -338,7 +363,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .emptylist{padding:26px 8px;text-align:center;color:var(--txt-faint);font-size:12.5px}
 
 /* ---------- transport / scrubber ---------- */
-.transport{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;padding:9px 18px 12px}
+.transport{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:9px 18px 12px}
+/* wide screens: NOW sits after the slider (placeControls moves it out of .playgrp), level with the track */
+.transport>#toNow{align-self:end;margin-bottom:-4px}
 .playgrp{display:flex;align-items:center;gap:6px}
 .play{
   width:38px;height:38px;border-radius:50%;background:linear-gradient(180deg,#f7c86b,#e9a13b);color:#1a1206;
@@ -637,32 +664,7 @@ body.sheet-open{overflow:hidden}
   .app.no-player .playgrp>:not(#toNow){display:none}
   .app.no-player .scrubwrap{grid-column:1;grid-row:3}
   .app.no-player #toNow{grid-column:2;grid-row:3;align-self:end;margin-bottom:-4px}
-  /* list view: add sits above search over the list's lower-right corner; search opens its field to the left */
-  .side{position:relative}
-  .app.list-view .list{padding-bottom:132px}
-  .app.list-view .searchrow{
-    position:absolute;left:14px;right:14px;bottom:14px;z-index:5;pointer-events:none;
-    display:grid;grid-template-columns:minmax(0,1fr) 48px;grid-auto-rows:48px;gap:12px 10px
-  }
-  .app.list-view .searchrow>*{pointer-events:auto}
-  .app.list-view #addItem{grid-column:2;grid-row:1}
-  .app.list-view #searchBtn{grid-column:2;grid-row:2}
-  .app.list-view .searchrow>button{
-    width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    color:var(--txt);background:rgba(22,33,58,.9);border:1px solid var(--line);
-    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.45)
-  }
-  .app.list-view .searchrow>button:hover,.app.list-view .searchrow>button:focus-visible{background:rgba(34,48,80,.95);border-color:#3a4b78;outline:none}
-  .app.list-view .searchrow>button svg{width:20px;height:20px}
-  .app.list-view .search{
-    grid-column:1;grid-row:2;padding:0 16px;border-radius:24px;border-color:var(--line);
-    background:rgba(22,33,58,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(0,0,0,.45);
-    opacity:0;visibility:hidden;transform:translateX(30px) scaleX(.85);transform-origin:right center;
-    transition:opacity .16s,transform .18s ease,visibility 0s .18s
-  }
-  .app.list-view .side.searching .search{opacity:1;visibility:visible;transform:none;transition:opacity .16s,transform .18s ease}
-  .app.list-view .search>svg{display:none}
-  .app.list-view .search input{font-size:16px}
+  .search input{font-size:16px}
   .readout{justify-content:space-between}
   .ro-time{width:178px;text-align:left}
   .ro-time b{font-size:14px}
@@ -819,13 +821,12 @@ body.sheet-open{overflow:hidden}
       <div class="sidehead">
         <div class="searchrow">
           <div class="search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
             <input id="q" type="search" placeholder="Search stays, tours, cities…" autocomplete="off">
           </div>
-          <button type="button" class="addbtn" id="addItem" title="Add an item (uses the search text as its name)" aria-label="Add an item">
+          <button type="button" class="fab" id="addItem" title="Add an item (uses the search text as its name)" aria-label="Add an item">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
           </button>
-          <button type="button" class="searchbtn" id="searchBtn" title="Search" aria-label="Search" aria-expanded="false" aria-controls="q">
+          <button type="button" class="fab searchbtn" id="searchBtn" title="Search (/)" aria-label="Search" aria-expanded="false" aria-controls="q">
             <svg class="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
             <svg class="ic-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
           </button>
